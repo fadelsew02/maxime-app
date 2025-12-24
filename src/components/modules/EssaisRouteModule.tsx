@@ -5,218 +5,436 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Upload, CheckCircle, CalendarIcon, Send } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { getEssaisBySection, updateEssai, updateEchantillon, EssaiTest, getEssaisByEchantillon } from '../../lib/mockData';
+import { getEchantillons, Echantillon as APIEchantillon, updateEchantillon as updateEchantillonAPI } from '../../lib/echantillonService';
+import { getEssaisByEchantillon as getEssaisAPI, createEssai, terminerEssai, demarrerEssai } from '../../lib/essaiService';
 import { format, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { formatDateFr } from '../../lib/dateUtils';
+
+interface EchantillonAvecEssais {
+  id: string;
+  code: string;
+  nature: string;
+  dateReception: string;
+  statut: string;
+  essaisRoute: string[];
+}
 
 export function EssaisRouteModule() {
   const { addNotification } = useNotifications();
-  const [essais, setEssais] = useState(() => getEssaisBySection('route'));
-  const [filter, setFilter] = useState<'all' | 'attente' | 'en_cours' | 'termine'>('all');
+  const [echantillons, setEchantillons] = useState<EchantillonAvecEssais[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterEssai, setFilterEssai] = useState('all');
+  const [filterCode, setFilterCode] = useState('');
 
-  const filteredEssais = essais.filter(e => {
-    if (filter === 'all') return true;
-    return e.statut === filter;
-  });
-
-  const refreshEssais = () => {
-    setEssais(getEssaisBySection('route'));
+  const loadEchantillons = async () => {
+    try {
+      setLoading(true);
+      
+      // Utiliser l'endpoint backend qui filtre les échantillons avec essais route envoyés
+      const response = await fetch('http://127.0.0.1:8000/api/echantillons/with_essais_route_envoyes/', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement');
+      }
+      
+      const apiEchantillons = await response.json();
+      
+      if (!apiEchantillons || !Array.isArray(apiEchantillons)) {
+        console.warn('Aucun échantillon reçu de l\'API');
+        setEchantillons([]);
+        return;
+      }
+      
+      // Formater les données
+      const echantillonsFormates = apiEchantillons.map((e: any) => ({
+        id: e.id,
+        code: e.code,
+        nature: e.nature,
+        dateReception: e.date_reception,
+        statut: e.statut,
+        essaisRoute: e.essais_route_envoyes || []
+      }));
+      
+      setEchantillons(echantillonsFormates);
+    } catch (error) {
+      console.error('Erreur chargement échantillons:', error);
+      toast.error('Erreur lors du chargement des échantillons');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Rafraîchir automatiquement les données toutes les 5 secondes
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshEssais();
-    }, 5000);
-
-    return () => clearInterval(interval);
+    loadEchantillons();
   }, []);
+
+  // Filtrage des échantillons par type d'essai et code
+  const filteredEchantillons = echantillons.filter(echantillon => {
+    const matchEssai = filterEssai === 'all' || echantillon.essaisRoute.includes(filterEssai);
+    const matchCode = filterCode === '' || echantillon.code.toLowerCase().includes(filterCode.toLowerCase());
+    return matchEssai && matchCode;
+  });
+
+  const getEssaiStatut = (echantillonId: string, essaiType: string) => {
+    // Lire depuis le backend via essaisData
+    return '-';
+  };
+
+  const getStatutColor = (statut: string) => {
+    if (statut === 'Terminé') return '#28A745';
+    if (statut === 'En cours') return '#003366';
+    return '#6C757D';
+  };
+
+  // Rafraîchissement automatique désactivé pour éviter l'oscillation
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     loadEchantillons();
+  //   }, 30000);
+
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <div className="p-8">
       <div className="mb-8">
         <h1>Section Route</h1>
         <p style={{ color: '#A9A9A9' }}>
-          Essais de laboratoire - Route
+          Essais de laboratoire - Route ({filteredEchantillons.length} échantillon{filteredEchantillons.length > 1 ? 's' : ''})
+        </p>
+        <p className="text-xs mt-1" style={{ color: '#6C757D' }}>
+          Les essais terminés restent visibles en lecture seule
         </p>
       </div>
 
-      <Tabs value={filter} onValueChange={(v: any) => setFilter(v)} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="all">Tous ({essais.length})</TabsTrigger>
-          <TabsTrigger value="attente">
-            En attente ({essais.filter(e => e.statut === 'attente').length})
-          </TabsTrigger>
-          <TabsTrigger value="en_cours">
-            En cours ({essais.filter(e => e.statut === 'en_cours').length})
-          </TabsTrigger>
-          <TabsTrigger value="termine">
-            Terminés ({essais.filter(e => e.statut === 'termine').length})
-          </TabsTrigger>
-        </TabsList>
+      {/* Filtres */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="filter-code">Filtrer par code échantillon</Label>
+          <Input
+            id="filter-code"
+            value={filterCode}
+            onChange={(e) => setFilterCode(e.target.value)}
+            placeholder="Rechercher un code..."
+            className="mt-2"
+          />
+        </div>
+        <div>
+          <Label htmlFor="filter-essai">Filtrer par type d'essai</Label>
+          <Select value={filterEssai} onValueChange={setFilterEssai}>
+            <SelectTrigger className="mt-2">
+              <SelectValue placeholder="Tous les essais" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les essais</SelectItem>
+              <SelectItem value="AG">Analyse granulométrique par tamisage</SelectItem>
+              <SelectItem value="CBR">CBR</SelectItem>
+              <SelectItem value="Proctor">Proctor</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredEssais.map((essai) => (
-            <EssaiCard key={essai.id} essai={essai} onUpdate={refreshEssais} />
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <p className="mt-2 text-gray-500">Chargement des échantillons...</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-6">
+          {filteredEchantillons.map((echantillon) => (
+            <EchantillonCard key={echantillon.id} echantillon={echantillon} onUpdate={loadEchantillons} />
           ))}
 
-          {filteredEssais.length === 0 && (
-            <div className="col-span-full text-center py-12" style={{ color: '#A9A9A9' }}>
-              Aucun essai à afficher
+          {filteredEchantillons.length === 0 && echantillons.length > 0 && (
+            <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
+              Aucun échantillon avec l'essai sélectionné
             </div>
           )}
-        </div>
-      </Tabs>
+
+          {echantillons.length === 0 && (
+            <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
+              Aucun échantillon avec essais route
+            </div>
+          )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function EssaiCard({ essai, onUpdate }: { essai: EssaiTest; onUpdate: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
+function EchantillonCard({ echantillon, onUpdate }: { echantillon: EchantillonAvecEssais; onUpdate: () => void }) {
+  const [selectedEssai, setSelectedEssai] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [essaisData, setEssaisData] = useState<Record<string, any>>({});
 
-  const handleCardClick = () => {
-    // Si l'essai est en attente et n'a pas de date de réception, on la met à jour automatiquement
-    if (essai.statut === 'attente' && !essai.dateReception) {
-      const today = new Date();
-      const dateReceptionFormatted = format(today, 'yyyy-MM-dd');
-      
-      // Mise à jour automatique de la date de réception
-      updateEssai(essai.id, {
-        dateReception: dateReceptionFormatted
-      });
-      
-      // Rafraîchir les données après mise à jour
-      setTimeout(onUpdate, 100);
+  useEffect(() => {
+    const loadEssais = async () => {
+      try {
+        const essais = await getEssaisAPI(echantillon.id);
+        const data: Record<string, any> = {};
+        essais.forEach(e => {
+          data[e.type] = {
+            id: e.id,
+            statut: e.statut,
+            statut_validation: e.statut_validation,
+            dateDebut: e.date_debut,
+            dateFin: e.date_fin,
+            operateur: e.operateur,
+            commentaires_validation: e.commentaires_validation
+          };
+        });
+        setEssaisData(data);
+      } catch (error) {
+        console.error('Erreur chargement essais:', error);
+      }
+    };
+    loadEssais();
+  }, [echantillon.id]);
+
+  const handleEssaiClick = async (essaiType: string) => {
+    setSelectedEssai(essaiType);
+    setIsDialogOpen(true);
+    
+    if (!essaisData[essaiType]) {
+      try {
+        await createEssai({
+          echantillon: echantillon.id,
+          type: essaiType,
+          section: 'route',
+          duree_estimee: essaiType === 'AG' ? 5 : essaiType === 'Proctor' ? 4 : 5,
+          statut: 'attente'
+        });
+      } catch (error) {
+        console.error('Erreur création essai:', error);
+      }
     }
-    setIsOpen(true);
+  };
+
+  const getEssaiData = (essaiType: string) => {
+    return essaisData[essaiType] || { statut: 'attente', dateDebut: null, dateFin: null, operateur: null };
+  };
+
+  const getStatutColor = (statut: string) => {
+    switch (statut) {
+      case 'attente': return '#FFC107';
+      case 'en_cours': return '#003366';
+      case 'pret_envoi': return '#FD7E14'; // Orange pour prêt à envoyer
+      case 'termine': return '#28A745';
+      default: return '#6C757D';
+    }
+  };
+
+  const getStatutText = (statut: string, essaiType?: string) => {
+    switch (statut) {
+      case 'attente': return 'En attente';
+      case 'en_cours': return 'En cours';
+      case 'pret_envoi': return 'Prêt à envoyer';
+      case 'termine': return 'Terminé';
+      case 'stockage': return echantillon.statut === 'urgente' ? 'Urgent' : 'Normal';
+      default: return echantillon.statut === 'urgente' ? 'Urgent' : 'Normal';
+    }
   };
 
   return (
     <>
-      <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleCardClick}>
+      <Card>
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <div>
-              <CardTitle className="text-base">{essai.type}</CardTitle>
-              <CardDescription>Code: {essai.echantillonCode}</CardDescription>
+              <CardTitle className="text-xl">{echantillon.code}</CardTitle>
+              <CardDescription>
+                {echantillon.nature} - Reçu le {formatDateFr(echantillon.dateReception)}
+              </CardDescription>
             </div>
-            {essai.statut === 'attente' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>En attente</Badge>}
-            {essai.statut === 'en_cours' && <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>En cours</Badge>}
-            {essai.statut === 'termine' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Terminé</Badge>}
+            <Badge 
+              style={{ 
+                backgroundColor: getStatutColor(echantillon.statut), 
+                color: '#FFFFFF' 
+              }}
+            >
+              {getStatutText(echantillon.statut)}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 text-sm">
-            {essai.dateReception && (
-              <div className="flex justify-between">
-                <span style={{ color: '#A9A9A9' }}>Réception:</span>
-                <span>{essai.dateReception}</span>
-              </div>
-            )}
-            {essai.dateDebut && (
-              <div className="flex justify-between">
-                <span style={{ color: '#A9A9A9' }}>Début:</span>
-                <span>{essai.dateDebut}</span>
-              </div>
-            )}
-            {essai.dateFin && (
-              <div className="flex justify-between">
-                <span style={{ color: '#A9A9A9' }}>Fin:</span>
-                <span>{essai.dateFin}</span>
-              </div>
-            )}
-            {essai.operateur && (
-              <div className="flex justify-between">
-                <span style={{ color: '#A9A9A9' }}>Opérateur:</span>
-                <span>{essai.operateur}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span style={{ color: '#A9A9A9' }}>Durée estimée:</span>
-              <span>{essai.dureeEstimee} jours</span>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                  <th className="text-left p-3 font-semibold">Type d'essai</th>
+                  <th className="text-left p-3 font-semibold">Statut</th>
+                  <th className="text-left p-3 font-semibold">Opérateur</th>
+                  <th className="text-left p-3 font-semibold">Dates</th>
+                  <th className="text-left p-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {echantillon.essaisRoute.map((essaiType) => {
+                  const essaiData = getEssaiData(essaiType);
+                  const { statut: statutEssai, dateDebut, dateFin, operateur } = essaiData;
+                  const isRejete = essaisData[essaiType]?.statut_validation === 'rejected' && statutEssai !== 'termine';
+                  const isEnvoye = statutEssai === 'termine';
+                  
+                  return (
+                    <tr key={essaiType} style={{ borderBottom: '1px solid #E5E7EB' }}>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{essaiType}</span>
+                          {isRejete && (
+                            <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF', fontSize: '10px' }}>
+                              REJETÉ
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <Badge 
+                          style={{ 
+                            backgroundColor: isEnvoye ? '#28A745' : isRejete ? '#DC3545' : statutEssai === 'en_cours' ? '#003366' : '#FFC107',
+                            color: '#FFFFFF'
+                          }}
+                        >
+                          {isEnvoye ? 'Terminé' : isRejete ? 'À refaire' : statutEssai === 'en_cours' ? 'En cours' : 'En cours'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-sm" style={{ color: '#6C757D' }}>
+                        {operateur || '-'}
+                      </td>
+                      <td className="p-3 text-xs" style={{ color: '#6C757D' }}>
+                        {dateDebut && <div>Début: {formatDateFr(dateDebut)}</div>}
+                        {dateFin && <div>Fin: {formatDateFr(dateFin)}</div>}
+                        {!dateDebut && !dateFin && '-'}
+                      </td>
+                      <td className="p-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEssaiClick(essaiType)}
+                        >
+                          {isEnvoye ? 'Voir' : 'Ouvrir'}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#f0f0f0', width: '700px', minWidth: '700px', maxWidth: '700px' }}>
           <DialogHeader>
-            <DialogTitle>Essai {essai.type} - {essai.echantillonCode}</DialogTitle>
+            <DialogTitle>Essai {selectedEssai} - {echantillon.code}</DialogTitle>
             <DialogDescription>
               Fiche détaillée de l'essai
             </DialogDescription>
           </DialogHeader>
-          <EssaiForm essai={essai} onClose={() => { setIsOpen(false); onUpdate(); }} />
+          {selectedEssai && (
+            <EssaiForm 
+              echantillon={echantillon}
+              essaiType={selectedEssai}
+              onClose={() => { 
+                setIsDialogOpen(false); 
+                setSelectedEssai(null);
+                onUpdate();
+              }} 
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
-function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }) {
+function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: EchantillonAvecEssais; essaiType: string; onClose: () => void }) {
   const today = new Date();
+  const [essaiData, setEssaiData] = useState<any>(null);
+  const [essaiStatut, setEssaiStatut] = useState('attente');
+  const [isRejete, setIsRejete] = useState(false);
+  const [commentaireRejet, setCommentaireRejet] = useState('');
+  const [formData, setFormData] = useState<any>({
+    dateDebut: today,
+    dateFin: addDays(today, 5),
+    operateur: '',
+    commentaires: '',
+    fichier: null,
+    fichierFile: null,
+  });
+  const [envoye, setEnvoye] = useState(false);
   
-  // Calculer la date de fin estimée automatiquement
+  useEffect(() => {
+    const loadEssai = async () => {
+      try {
+        const essais = await getEssaisAPI(echantillon.id);
+        const essai = essais.find(e => e.type === essaiType);
+        if (essai) {
+          setEssaiData(essai);
+          setEssaiStatut(essai.statut || 'attente');
+          setIsRejete(essai.statut_validation === 'rejected');
+          setCommentaireRejet(essai.commentaires_validation || '');
+          setEnvoye(essai.statut === 'termine');
+          const dureeEstimee = essaiType === 'AG' ? 5 : essaiType === 'Proctor' ? 4 : 5;
+          setFormData({
+            dateDebut: essai.date_debut ? new Date(essai.date_debut) : today,
+            dateFin: essai.date_fin ? new Date(essai.date_fin) : addDays(today, dureeEstimee),
+            operateur: essai.operateur || '',
+            commentaires: essai.commentaires || '',
+            fichier: essai.fichier || null,
+            ...(essai.resultats || {}),
+          });
+        }
+      } catch (error) {
+        console.error('Erreur chargement essai:', error);
+      }
+    };
+    loadEssai();
+  }, [echantillon.id, essaiType]);
+  
+  if (!essaiData) return <div>Chargement...</div>;
+  
+  const essai = {
+    id: essaiData.id,
+    type: essaiType,
+    echantillonCode: echantillon.code,
+    statut: essaiData.statut || 'attente',
+    dateReception: echantillon.dateReception,
+    dureeEstimee: essaiType === 'AG' ? 5 : essaiType === 'Proctor' ? 4 : 5,
+    dateDebut: essaiData.date_debut || null,
+    dateFin: essaiData.date_fin || null,
+    operateur: essaiData.operateur || '',
+    commentaires: essaiData.commentaires || '',
+    resultats: essaiData.resultats || {}
+  };
+  
   const calculateDateFin = (dateDebut: Date, dureeEstimee: number) => {
     return addDays(dateDebut, dureeEstimee);
   };
-
-  const [formData, setFormData] = useState({
-    dateDebut: essai.dateDebut ? new Date(essai.dateDebut) : today,
-    dateFin: essai.dateFin ? new Date(essai.dateFin) : calculateDateFin(today, essai.dureeEstimee),
-    operateur: essai.operateur || '',
-    commentaires: essai.commentaires || '',
-    // Résultats spécifiques selon le type d'essai
-    ...(essai.resultats || {}),
-  });
-
-  // Mettre à jour automatiquement la date de réception si elle n'existe pas
-  useEffect(() => {
-    if (!essai.dateReception) {
-      const dateReceptionFormatted = format(today, 'yyyy-MM-dd');
-      updateEssai(essai.id, {
-        dateReception: dateReceptionFormatted
-      });
-    }
-  }, [essai.dateReception, essai.id, today]);
-
-  // Mettre à jour automatiquement la date de fin quand la date de début change
-  useEffect(() => {
-    if (formData.dateDebut && essai.statut === 'attente') {
-      const newDateFin = calculateDateFin(formData.dateDebut, essai.dureeEstimee);
-      setFormData(prev => ({
-        ...prev,
-        dateFin: newDateFin
-      }));
-    }
-  }, [formData.dateDebut, essai.dureeEstimee, essai.statut]);
-
-  const handleDemarrer = () => {
-    if (!formData.dateDebut) {
-      toast.error('Veuillez saisir la date de début');
-      return;
-    }
-
-    const dateDebutFormatted = format(formData.dateDebut, 'yyyy-MM-dd');
-    const dateFinFormatted = formData.dateFin ? format(formData.dateFin, 'yyyy-MM-dd') : format(calculateDateFin(formData.dateDebut, essai.dureeEstimee), 'yyyy-MM-dd');
-
-    updateEssai(essai.id, {
-      statut: 'en_cours',
-      dateDebut: dateDebutFormatted,
-      dateFin: dateFinFormatted,
-      operateur: formData.operateur,
-    });
-    toast.success('Essai démarré');
-    onClose();
+  
+  const updateFormData = (newData: any) => {
+    setFormData({ ...formData, ...newData });
   };
+
+
 
   const handleTerminer = () => {
     if (!formData.dateFin) {
@@ -224,68 +442,28 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
       return;
     }
 
+    // TODO: Sauvegarder via l'API backend
+    const updatedData = {
+      statut: 'termine',
+      dateFin: format(formData.dateFin, 'yyyy-MM-dd'),
+      resultats: getResultats(),
+      commentaires: formData.commentaires,
+    };
+    console.log('Données à envoyer à l\'API:', updatedData);
+
+    // Synchroniser avec mockData
     updateEssai(essai.id, {
       statut: 'termine',
       dateFin: format(formData.dateFin, 'yyyy-MM-dd'),
       resultats: getResultats(),
       commentaires: formData.commentaires,
+      operateur: formData.operateur,
+      dateDebut: formData.dateDebut ? format(formData.dateDebut, 'yyyy-MM-dd') : null,
     });
 
-    // Vérifier si tous les essais de l'échantillon sont terminés
-    const essaisEchantillon = getEssaisByEchantillon(essai.echantillonCode);
-    const tousFinis = essaisEchantillon.every(e => e.statut === 'termine');
-
-    if (tousFinis) {
-      // Changer le statut de l'échantillon à 'decodification'
-      updateEchantillon(essai.echantillonCode, { statut: 'decodification' });
-      toast.success(`Essai terminé - Échantillon ${essai.echantillonCode} envoyé automatiquement à la décodification`);
-
-      // Notifications pour les différents rôles
-      addNotification({
-        type: 'success',
-        title: 'Essais terminés',
-        message: `Tous les essais de l'échantillon ${essai.echantillonCode} sont terminés et envoyés à la décodification`,
-        userRole: 'operateur_route',
-        module: 'Essais Route',
-      });
-
-      addNotification({
-        type: 'success',
-        title: 'Essais terminés',
-        message: `Tous les essais de l'échantillon ${essai.echantillonCode} sont terminés et envoyés à la décodification`,
-        userRole: 'operateur_mecanique',
-        module: 'Essais Route',
-      });
-
-      addNotification({
-        type: 'info',
-        title: 'Échantillon prêt pour décodification',
-        message: `L'échantillon ${essai.echantillonCode} avec tous ses essais terminés est prêt pour la décodification`,
-        userRole: 'receptionniste',
-        module: 'Essais Route',
-        actionRequired: true,
-      });
-
-      addNotification({
-        type: 'info',
-        title: 'Échantillon prêt pour décodification',
-        message: `L'échantillon ${essai.echantillonCode} avec tous ses essais terminés est prêt pour la décodification`,
-        userRole: 'responsable_traitement',
-        module: 'Essais Route',
-        actionRequired: true,
-      });
-    } else {
-      toast.success('Essai terminé');
-
-      // Notification pour l'essai spécifique terminé
-      addNotification({
-        type: 'success',
-        title: `Essai ${essai.type} terminé`,
-        message: `L'essai ${essai.type} pour l'échantillon ${essai.echantillonCode} a été terminé`,
-        userRole: 'operateur_route',
-        module: 'Essais Route',
-      });
-    }
+    // Changer le statut de l'échantillon à 'decodification'
+    updateEchantillon(essai.echantillonCode, { statut: 'decodification' });
+    toast.success(`Essai terminé - Échantillon ${essai.echantillonCode} envoyé à la décodification`);
 
     onClose();
   };
@@ -305,69 +483,79 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
     onClose();
   };
 
-  const getResultats = () => {
+  const getResultats = (data = formData) => {
     if (essai.type === 'AG') {
       return {
-        pourcent_inf_2mm: formData.pourcent_inf_2mm || '',
-        pourcent_inf_80um: formData.pourcent_inf_80um || '',
-        coefficient_uniformite: formData.coefficient_uniformite || '',
+        pourcent_inf_2mm: data.pourcent_inf_2mm || '',
+        pourcent_inf_80um: data.pourcent_inf_80um || '',
+        coefficient_uniformite: data.coefficient_uniformite || '',
       };
     }
     if (essai.type === 'Proctor') {
       return {
-        densite_opt: formData.densite_opt || '',
-        teneur_eau_opt: formData.teneur_eau_opt || '',
-        type_proctor: formData.type_proctor || 'Normal',
+        densite_opt: data.densite_opt || '',
+        teneur_eau_opt: data.teneur_eau_opt || '',
+        type_proctor: data.type_proctor || 'Normal',
       };
     }
     if (essai.type === 'CBR') {
       return {
-        cbr_95: formData.cbr_95 || '',
-        cbr_98: formData.cbr_98 || '',
-        cbr_100: formData.cbr_100 || '',
-        gonflement: formData.gonflement || '',
+        cbr_95: data.cbr_95 || '',
+        cbr_98: data.cbr_98 || '',
+        cbr_100: data.cbr_100 || '',
+        gonflement: data.gonflement || '',
       };
     }
     return {};
+  };
+  
+  // Gestion du fichier
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setFormData(prev => ({ ...prev, fichier: file.name, fichierFile: file }));
+    toast.success(`Fichier "${file.name}" sélectionné`);
   };
 
   const essaisEchantillon = getEssaisByEchantillon(essai.echantillonCode);
   const tousEssaisFinis = essaisEchantillon.every(e => e.statut === 'termine');
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Date réception</Label>
-          <Input 
-            value={essai.dateReception || format(today, 'yyyy-MM-dd')} 
-            disabled 
-          />
+    <div className="space-y-2">
+      {isRejete && (
+        <div className="p-3 rounded" style={{ backgroundColor: '#DC354520', borderLeft: '4px solid #DC3545' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>ESSAI REJETÉ</Badge>
+          </div>
+          <p className="text-sm font-semibold mb-1">Raison du rejet :</p>
+          <p className="text-sm" style={{ color: '#DC3545' }}>{commentaireRejet || 'Aucun commentaire'}</p>
+          <p className="text-xs mt-2" style={{ color: '#6C757D' }}>Veuillez corriger et renvoyer l'essai</p>
         </div>
-
-        <div className="space-y-2">
-          <Label>Statut</Label>
+      )}
+      
+      <div className="grid grid-cols-1 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Statut</Label>
           <div>
-            {essai.statut === 'attente' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>En attente</Badge>}
-            {essai.statut === 'en_cours' && <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>En cours</Badge>}
-            {essai.statut === 'termine' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Terminé</Badge>}
+            {essaiStatut === 'attente' && <Badge className="text-xs" style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>Attente</Badge>}
+            {essaiStatut === 'en_cours' && !isRejete && <Badge className="text-xs" style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>En cours</Badge>}
+            {essaiStatut === 'en_cours' && isRejete && <Badge className="text-xs" style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>À refaire</Badge>}
+            {essaiStatut === 'pret_envoi' && <Badge className="text-xs" style={{ backgroundColor: '#FD7E14', color: '#FFFFFF' }}>Prêt</Badge>}
+            {essaiStatut === 'termine' && <Badge className="text-xs" style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Terminé</Badge>}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="operateur">Opérateur *</Label>
+        <div className="space-y-1">
+          <Label htmlFor="operateur" className="text-xs">Opérateur</Label>
           <Input
             id="operateur"
+            className="text-xs h-6"
             value={formData.operateur}
-            onChange={(e) => setFormData({ ...formData, operateur: e.target.value })}
-            placeholder="Nom de l'opérateur"
-            disabled={essai.statut === 'termine'}
+            onChange={(e) => updateFormData({ operateur: e.target.value })}
+            placeholder="Nom"
+            disabled={essaiStatut === 'termine'}
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Durée estimée</Label>
-          <Input value={`${essai.dureeEstimee} jours`} disabled />
         </div>
 
         <div className="space-y-2">
@@ -377,7 +565,7 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
               <Button
                 variant="outline"
                 className="w-full justify-start text-left"
-                disabled={essai.statut === 'termine'}
+                disabled={essaiStatut === 'termine'}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {formData.dateDebut ? (
@@ -399,7 +587,7 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
           </Popover>
         </div>
 
-        {essai.statut !== 'attente' && (
+        {essaiStatut !== 'attente' && (
           <div className="space-y-2">
             <Label htmlFor="dateFin">Date fin estimée *</Label>
             <Popover>
@@ -407,7 +595,7 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                 <Button
                   variant="outline"
                   className="w-full justify-start text-left"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {formData.dateFin ? (
@@ -429,27 +617,12 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
             </Popover>
           </div>
         )}
-
-        {/* Affichage de la date de fin calculée automatiquement pour les essais en attente */}
-        {essai.statut === 'attente' && formData.dateDebut && (
-          <div className="space-y-2">
-            <Label>Date fin estimée (calculée)</Label>
-            <Input 
-              value={format(formData.dateFin || calculateDateFin(formData.dateDebut, essai.dureeEstimee), 'PPP', { locale: fr })} 
-              disabled 
-            />
-            <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Calculée automatiquement: début + {essai.dureeEstimee} jours
-            </p>
-          </div>
-        )}
       </div>
 
-      {essai.statut !== 'attente' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold">Résultats</h3>
-          
-          {essai.type === 'AG' && (
+      <div className="space-y-1">
+        <h3 className="font-semibold">Résultats</h3>
+        
+        {essai.type === 'AG' && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="pourcent_inf_2mm">% passant à 2mm *</Label>
@@ -458,9 +631,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.1"
                   value={formData.pourcent_inf_2mm || ''}
-                  onChange={(e) => setFormData({ ...formData, pourcent_inf_2mm: e.target.value })}
+                  onChange={(e) => updateFormData({ pourcent_inf_2mm: e.target.value })}
                   placeholder="Ex: 85.5"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -470,9 +643,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.1"
                   value={formData.pourcent_inf_80um || ''}
-                  onChange={(e) => setFormData({ ...formData, pourcent_inf_80um: e.target.value })}
+                  onChange={(e) => updateFormData({ pourcent_inf_80um: e.target.value })}
                   placeholder="Ex: 45.2"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -482,9 +655,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.01"
                   value={formData.coefficient_uniformite || ''}
-                  onChange={(e) => setFormData({ ...formData, coefficient_uniformite: e.target.value })}
+                  onChange={(e) => updateFormData({ coefficient_uniformite: e.target.value })}
                   placeholder="Ex: 6.5"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
             </>
@@ -497,9 +670,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                 <Input
                   id="type_proctor"
                   value={formData.type_proctor || 'Normal'}
-                  onChange={(e) => setFormData({ ...formData, type_proctor: e.target.value })}
+                  onChange={(e) => updateFormData({ type_proctor: e.target.value })}
                   placeholder="Normal ou Modifié"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -509,9 +682,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.01"
                   value={formData.densite_opt || ''}
-                  onChange={(e) => setFormData({ ...formData, densite_opt: e.target.value })}
+                  onChange={(e) => updateFormData({ densite_opt: e.target.value })}
                   placeholder="Ex: 1.95"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -521,9 +694,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.1"
                   value={formData.teneur_eau_opt || ''}
-                  onChange={(e) => setFormData({ ...formData, teneur_eau_opt: e.target.value })}
+                  onChange={(e) => updateFormData({ teneur_eau_opt: e.target.value })}
                   placeholder="Ex: 12.5"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
             </>
@@ -537,9 +710,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   id="cbr_95"
                   type="number"
                   value={formData.cbr_95 || ''}
-                  onChange={(e) => setFormData({ ...formData, cbr_95: e.target.value })}
+                  onChange={(e) => updateFormData({ cbr_95: e.target.value })}
                   placeholder="Ex: 45"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -548,9 +721,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   id="cbr_98"
                   type="number"
                   value={formData.cbr_98 || ''}
-                  onChange={(e) => setFormData({ ...formData, cbr_98: e.target.value })}
+                  onChange={(e) => updateFormData({ cbr_98: e.target.value })}
                   placeholder="Ex: 65"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -559,9 +732,9 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   id="cbr_100"
                   type="number"
                   value={formData.cbr_100 || ''}
-                  onChange={(e) => setFormData({ ...formData, cbr_100: e.target.value })}
+                  onChange={(e) => updateFormData({ cbr_100: e.target.value })}
                   placeholder="Ex: 85"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
               <div className="space-y-2">
@@ -571,58 +744,127 @@ function EssaiForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }
                   type="number"
                   step="0.01"
                   value={formData.gonflement || ''}
-                  onChange={(e) => setFormData({ ...formData, gonflement: e.target.value })}
+                  onChange={(e) => updateFormData({ gonflement: e.target.value })}
                   placeholder="Ex: 0.5"
-                  disabled={essai.statut === 'termine'}
+                  disabled={essaiStatut === 'termine'}
                 />
               </div>
             </>
           )}
 
-          <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="commentaires">Commentaires et observations</Label>
             <Textarea
               id="commentaires"
               value={formData.commentaires}
-              onChange={(e) => setFormData({ ...formData, commentaires: e.target.value })}
+              onChange={(e) => updateFormData({ commentaires: e.target.value })}
               placeholder="Observations et remarques sur l'essai..."
               rows={3}
-              disabled={essai.statut === 'termine'}
+              disabled={essaiStatut === 'termine'}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Fichiers (Word/Excel)</Label>
-            <Button variant="outline" size="sm" disabled={essai.statut === 'termine'}>
+            <Label>Fichier Excel *</Label>
+            <input
+              type="file"
+              id="file-upload"
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+              disabled={essaiStatut === 'termine'}
+            />
+            <Button 
+              type="button"
+              variant="outline" 
+              size="sm" 
+              onClick={() => document.getElementById('file-upload')?.click()}
+              disabled={essaiStatut === 'termine'}
+            >
               <Upload className="h-4 w-4 mr-2" />
-              Importer un fichier
+              {formData.fichier ? 'Changer le fichier' : 'Sélectionner un fichier'}
             </Button>
+            {formData.fichier && (
+              <p className="text-xs mt-1" style={{ color: '#28A745' }}>
+                ✓ {formData.fichier}
+              </p>
+            )}
             <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Formats acceptés: .docx, .xlsx
+              Formats recommandés: .xlsx, .xls
             </p>
-          </div>
         </div>
-      )}
+      </div>
 
       <div className="flex gap-3 justify-end pt-4">
-        {essai.statut === 'attente' && formData.operateur && formData.dateDebut && (
-          <Button onClick={handleDemarrer} style={{ backgroundColor: '#003366' }}>
-            Démarrer l'essai
-          </Button>
+        {essaiStatut === 'termine' && (
+          <div className="w-full text-center py-3">
+            <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF', fontSize: '14px', padding: '8px 16px' }}>
+              ✓ Essai terminé et envoyé à la décodification
+            </Badge>
+          </div>
         )}
-
-        {essai.statut === 'en_cours' && formData.dateFin && (
-          <Button onClick={handleTerminer} style={{ backgroundColor: '#28A745' }}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Terminer l'essai
-          </Button>
-        )}
-
-        {essai.statut === 'termine' && tousEssaisFinis && (
-          <Button onClick={handleEnvoyerDecodification} style={{ backgroundColor: '#003366' }}>
+        
+        {formData.fichier && essaiStatut !== 'termine' && (
+          <Button 
+            onClick={async () => {
+              const resultats = getResultats();
+              const hasResults = Object.values(resultats).some(val => val !== '');
+              
+              if (!hasResults) {
+                toast.error('Veuillez saisir les résultats avant d\'envoyer');
+                return;
+              }
+              
+              try {
+                const resultats = getResultats();
+                
+                // Si l'essai est en attente, le démarrer d'abord
+                if (essaiStatut === 'attente') {
+                  await demarrerEssai(essai.id, {
+                    date_debut: formData.dateDebut ? format(formData.dateDebut, 'yyyy-MM-dd') : format(today, 'yyyy-MM-dd'),
+                    operateur: formData.operateur
+                  });
+                }
+                
+                // Terminer l'essai et réinitialiser le statut de validation
+                console.log('Fichier à envoyer:', formData.fichierFile);
+                await terminerEssai(essai.id, {
+                  date_fin: formData.dateFin ? format(formData.dateFin, 'yyyy-MM-dd') : format(today, 'yyyy-MM-dd'),
+                  resultats: resultats,
+                  commentaires: formData.commentaires,
+                  statut_validation: 'pending'
+                }, formData.fichierFile);
+                
+                // Envoyer l'échantillon en décodification dès qu'un essai est terminé
+                await updateEchantillonAPI(echantillon.id, { statut: 'decodification' });
+                toast.success(`✓ Essai ${essai.type} ${isRejete ? 'renvoyé' : 'envoyé'} à la décodification`, {
+                  duration: 3000,
+                })
+                
+                setEssaiStatut('termine');
+                onClose();
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+              } catch (error) {
+                console.error('Erreur:', error);
+                toast.error('Erreur lors de l\'envoi');
+              }
+            }}
+            style={{ backgroundColor: '#28A745' }}
+          >
             <Send className="h-4 w-4 mr-2" />
-            Envoyer à la décodification
+            Envoyer pour décodification
           </Button>
+        )}
+        
+
+        
+        {envoye && (
+          <div className="text-center py-2">
+            <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>
+              ✓ Envoyé à la décodification
+            </Badge>
+          </div>
         )}
       </div>
     </div>

@@ -5,6 +5,8 @@ Configuration de l'interface d'administration Django
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import User, Client, Echantillon, Essai, Notification, ValidationHistory
+from .models_action_log import ActionLog
+from .models_workflow_data import RapportValidation, EssaiData, PlanificationData
 
 
 @admin.register(User)
@@ -116,3 +118,61 @@ class ValidationHistoryAdmin(admin.ModelAdmin):
     search_fields = ['echantillon__code', 'validateur__username']
     readonly_fields = ['created_at']
     date_hierarchy = 'created_at'
+
+
+@admin.register(ActionLog)
+class ActionLogAdmin(admin.ModelAdmin):
+    """Administration des logs d'actions"""
+    
+    list_display = ['username', 'action_type', 'http_method', 'endpoint', 'success', 'response_status', 'created_at']
+    list_filter = ['action_type', 'http_method', 'success', 'user_role', 'created_at']
+    search_fields = ['username', 'action_description', 'endpoint', 'echantillon_code', 'client_code']
+    readonly_fields = [
+        'id', 'user', 'username', 'user_role', 'action_type', 'action_description',
+        'http_method', 'endpoint', 'ip_address', 'user_agent', 'request_data',
+        'response_status', 'echantillon_id', 'echantillon_code', 'essai_id',
+        'essai_type', 'client_id', 'client_code', 'rapport_id', 'workflow_id',
+        'success', 'error_message', 'duration_ms', 'created_at'
+    ]
+    date_hierarchy = 'created_at'
+    
+    def has_add_permission(self, request):
+        # Les logs sont créés automatiquement, pas d'ajout manuel
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        # Les logs ne peuvent pas être modifiés
+        return False
+
+
+@admin.register(RapportValidation)
+class RapportValidationAdmin(admin.ModelAdmin):
+    """Administration des rapports en validation"""
+    
+    list_display = ['code_echantillon', 'client_name', 'etape_actuelle', 'status', 'date_envoi']
+    list_filter = ['etape_actuelle', 'status', 'created_at']
+    search_fields = ['code_echantillon', 'client_name', 'essai_type']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'
+
+
+@admin.register(EssaiData)
+class EssaiDataAdmin(admin.ModelAdmin):
+    """Administration des données d'essais"""
+    
+    list_display = ['essai_id', 'echantillon_code', 'essai_type', 'statut', 'envoye']
+    list_filter = ['essai_type', 'statut', 'envoye', 'created_at']
+    search_fields = ['essai_id', 'echantillon_code', 'operateur']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'
+
+
+@admin.register(PlanificationData)
+class PlanificationDataAdmin(admin.ModelAdmin):
+    """Administration des planifications d'essais"""
+    
+    list_display = ['echantillon_code', 'essai_type', 'date_planifiee', 'operateur_assigne', 'statut', 'completed']
+    list_filter = ['essai_type', 'statut', 'completed', 'date_planifiee']
+    search_fields = ['echantillon_code', 'operateur_assigne']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'date_planifiee'

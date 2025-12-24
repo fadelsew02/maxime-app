@@ -5,13 +5,13 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Upload, CheckCircle, CalendarIcon, Send, RotateCcw, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { getEssaisBySection, updateEssai, updateEchantillon, EssaiTest, getEssaisByEchantillon } from '../../lib/mockData';
+import { essaiApi } from '../../lib/essaiApi';
+import { getEchantillons } from '../../lib/echantillonService';
 import { format, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -37,65 +37,116 @@ interface FormData {
 
 export function EssaisRejetesModule() {
   const { addNotification } = useNotifications();
-  const [essais, setEssais] = useState(() => getEssaisBySection('route').filter(e => e.statutValidation === 'rejected'));
-  const [filter, setFilter] = useState<'all' | 'rejected' | 'termine'>('all');
+  const [essais, setEssais] = useState<any[]>([]);
 
-  const filteredEssais = essais.filter(e => {
-    if (filter === 'all') return true;
-    if (filter === 'rejected') return e.statutValidation === 'rejected';
-    return e.statut === filter;
-  });
-
-  const refreshEssais = () => {
-    setEssais(getEssaisBySection('route').filter(e => e.statutValidation === 'rejected'));
+  const refreshEssais = async () => {
+    try {
+      const echantillons = await getEchantillons();
+      const rejectedEssais = [];
+      
+      for (const ech of echantillons) {
+        const essaisEch = await essaiApi.getByEchantillon(ech.id);
+        // Traçabilité indélébile: tous les essais qui ont eu une date_rejet restent visibles
+        const essaisRejetes = essaisEch.filter(e => e.date_rejet && (e.type === 'AG' || e.type === 'Proctor' || e.type === 'CBR'));
+        
+        for (const essai of essaisRejetes) {
+          const dureeEstimee = essai.type === 'AG' ? 5 : 
+                              essai.type === 'Proctor' ? 4 : 
+                              essai.type === 'CBR' ? 5 :
+                              essai.type === 'Oedometre' ? 18 : 8;
+          
+          rejectedEssais.push({
+            id: essai.id,
+            type: essai.type,
+            echantillonId: ech.id,
+            echantillonCode: ech.code,
+            statut: essai.statut,
+            dateReception: essai.date_reception,
+            dateDebut: essai.date_debut,
+            dateFin: essai.date_fin,
+            dateRejet: essai.date_rejet,
+            operateur: essai.operateur,
+            dureeEstimee: dureeEstimee,
+            commentaires: essai.commentaires,
+            resultats: essai.resultats || {},
+            commentairesValidation: essai.commentaires_validation,
+          });
+        }
+      }
+      
+      setEssais(rejectedEssais);
+    } catch (error) {
+      console.error('Erreur chargement essais rejetés:', error);
+      toast.error('Erreur lors du chargement');
+    }
   };
 
-  // Rafraîchir automatiquement les données toutes les 5 secondes
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshEssais();
-    }, 5000);
-
-    return () => clearInterval(interval);
+    refreshEssais();
   }, []);
 
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1>Essais Rejetés</h1>
+        <h1>Essais Rejetés - Traçabilité Indélébile</h1>
         <p style={{ color: '#A9A9A9' }}>
-          Essais rejetés lors de la décodification - Modification autorisée
+          Historique permanent de tous les essais ayant été rejetés - Traçabilité complète
         </p>
+        <div className="mt-2 p-3 rounded-lg" style={{ backgroundColor: '#FFF3CD', border: '1px solid #FFEAA7' }}>
+          <p className="text-sm font-semibold" style={{ color: '#856404' }}>
+            ⚠️ Cette interface maintient la trace indélébile de tous les essais rejetés, même après correction et acceptation.
+          </p>
+        </div>
       </div>
 
-      <Tabs value={filter} onValueChange={(v: any) => setFilter(v)} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="all">Tous ({essais.length})</TabsTrigger>
-          <TabsTrigger value="rejected">
-            Rejeté ({essais.filter(e => e.statutValidation === 'rejected').length})
-          </TabsTrigger>
-          <TabsTrigger value="termine">
-            Terminés ({essais.filter(e => e.statut === 'termine').length})
-          </TabsTrigger>
-        </TabsList>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredEssais.map((essai) => (
-            <EssaiRejeteCard key={essai.id} essai={essai} onUpdate={refreshEssais} />
-          ))}
-
-          {filteredEssais.length === 0 && (
-            <div className="col-span-full text-center py-12" style={{ color: '#A9A9A9' }}>
-              Aucun essai rejeté à afficher
+      <div className="space-y-8">
+        {/* Analyse granulométrique */}
+        {essais.filter(e => e.type === 'AG').length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Analyse granulométrique par tamisage ({essais.filter(e => e.type === 'AG').length})</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {essais.filter(e => e.type === 'AG').map((essai) => (
+                <EssaiRejeteCard key={essai.id} essai={essai} onUpdate={refreshEssais} />
+              ))}
             </div>
-          )}
-        </div>
-      </Tabs>
+          </div>
+        )}
+
+        {/* CBR */}
+        {essais.filter(e => e.type === 'CBR').length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">CBR ({essais.filter(e => e.type === 'CBR').length})</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {essais.filter(e => e.type === 'CBR').map((essai) => (
+                <EssaiRejeteCard key={essai.id} essai={essai} onUpdate={refreshEssais} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Proctor */}
+        {essais.filter(e => e.type === 'Proctor').length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Proctor ({essais.filter(e => e.type === 'Proctor').length})</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {essais.filter(e => e.type === 'Proctor').map((essai) => (
+                <EssaiRejeteCard key={essai.id} essai={essai} onUpdate={refreshEssais} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {essais.length === 0 && (
+          <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
+            Aucun essai rejeté à afficher
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function EssaiRejeteCard({ essai, onUpdate }: { essai: EssaiTest; onUpdate: () => void }) {
+function EssaiRejeteCard({ essai, onUpdate }: { essai: any; onUpdate: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleCardClick = () => {
@@ -112,10 +163,11 @@ function EssaiRejeteCard({ essai, onUpdate }: { essai: EssaiTest; onUpdate: () =
               <CardDescription>Code: {essai.echantillonCode}</CardDescription>
             </div>
             <div className="flex flex-col gap-1">
-              <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>Rejeté</Badge>
-              {essai.statut === 'attente' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>En attente</Badge>}
+              <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>Rejeté le {essai.dateRejet}</Badge>
+              {essai.statut === 'attente' && essai.statut_validation === 'rejected' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>En attente</Badge>}
               {essai.statut === 'en_cours' && <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>En cours</Badge>}
-              {essai.statut === 'termine' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Terminé</Badge>}
+              {essai.statut === 'termine' && essai.statut_validation === 'accepted' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Accepté</Badge>}
+              {essai.statut === 'termine' && essai.statut_validation !== 'accepted' && <Badge style={{ backgroundColor: '#FD7E14', color: '#FFFFFF' }}>Terminé</Badge>}
             </div>
           </div>
         </CardHeader>
@@ -174,7 +226,7 @@ function EssaiRejeteCard({ essai, onUpdate }: { essai: EssaiTest; onUpdate: () =
   );
 }
 
-function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => void }) {
+function EssaiRejeteForm({ essai, onClose }: { essai: any; onClose: () => void }) {
   const today = new Date();
 
   // Calculer la date de fin estimée automatiquement
@@ -190,17 +242,19 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
     operateur: essai.operateur || 'Jean Dupont',
     commentaires: essai.commentaires || 'Essai corrigé suite au rejet lors de la décodification.',
     // Résultats spécifiques selon le type d'essai
-    pourcent_inf_2mm: essai.resultats?.pourcent_inf_2mm || '85.5',
-    pourcent_inf_80um: essai.resultats?.pourcent_inf_80um || '45.2',
-    coefficient_uniformite: essai.resultats?.coefficient_uniformite || '6.5',
+    pourcent_inf_2mm: essai.resultats?.pourcent_inf_2mm || '',
+    pourcent_inf_80um: essai.resultats?.pourcent_inf_80um || '',
+    coefficient_uniformite: essai.resultats?.coefficient_uniformite || '',
     type_proctor: essai.resultats?.type_proctor || 'Normal',
-    densite_opt: essai.resultats?.densite_opt || '1.95',
-    teneur_eau_opt: essai.resultats?.teneur_eau_opt || '12.5',
-    cbr_95: essai.resultats?.cbr_95 || '45',
-    cbr_98: essai.resultats?.cbr_98 || '65',
-    cbr_100: essai.resultats?.cbr_100 || '85',
-    gonflement: essai.resultats?.gonflement || '0.5',
+    densite_opt: essai.resultats?.densite_opt || '',
+    teneur_eau_opt: essai.resultats?.teneur_eau_opt || '',
+    cbr_95: essai.resultats?.cbr_95 || '',
+    cbr_98: essai.resultats?.cbr_98 || '',
+    cbr_100: essai.resultats?.cbr_100 || '',
+    gonflement: essai.resultats?.gonflement || '',
   });
+  
+  const [newFileSelected, setNewFileSelected] = useState(false);
 
   // Mettre à jour automatiquement la date de réception si elle n'existe pas
   useEffect(() => {
@@ -232,13 +286,21 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
     const dateDebutFormatted = format(formData.dateDebut, 'yyyy-MM-dd');
     const dateFinFormatted = formData.dateFin ? format(formData.dateFin, 'yyyy-MM-dd') : format(calculateDateFin(formData.dateDebut, essai.dureeEstimee), 'yyyy-MM-dd');
 
-    updateEssai(essai.id, {
+    // Mettre à jour dans localStorage
+    const updatedData = {
+      ...JSON.parse(localStorage.getItem(essai.id) || '{}'),
       statut: 'en_cours',
       dateDebut: dateDebutFormatted,
       dateFin: dateFinFormatted,
       operateur: formData.operateur,
-    });
-    toast.success('Essai redémarré');
+      resultats: getResultats(),
+      commentaires: formData.commentaires,
+      validationStatus: null,
+      envoye: true
+    };
+    localStorage.setItem(essai.id, JSON.stringify(updatedData));
+    
+    toast.success('Essai corrigé et renvoyé à la décodification');
     onClose();
   };
 
@@ -264,9 +326,19 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
     if (tousFinisEtValides) {
       // Changer le statut de l'échantillon à 'decodification' pour re-validation
       updateEchantillon(essai.echantillonCode, { statut: 'decodification' });
-      toast.success(`Essai corrigé - Échantillon ${essai.echantillonCode} renvoyé automatiquement à la décodification pour re-validation`);
+      toast.success(`Correction terminée - Échantillon ${essai.echantillonCode} renvoyé à la décodification pour nouvelle validation`);
+      
+      // Ajouter une notification pour l'équipe de décodification
+      addNotification({
+        type: 'info',
+        title: 'Essai corrigé disponible',
+        message: `L'essai ${essai.type} de l'échantillon ${essai.echantillonCode} a été corrigé et est prêt pour re-validation`,
+        userRole: 'responsable_traitement',
+        module: 'Essais Rejetés',
+        actionRequired: true,
+      });
     } else {
-      toast.success('Essai corrigé et terminé');
+      toast.success('Correction de l\'essai terminée');
     }
 
     onClose();
@@ -347,12 +419,15 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
         </div>
 
         <div className="space-y-2">
-          <Label>Statut</Label>
-          <div className="flex gap-2">
-            <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>Rejeté</Badge>
-            {essai.statut === 'attente' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>En attente</Badge>}
-            {essai.statut === 'en_cours' && <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>En cours</Badge>}
-            {essai.statut === 'termine' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Terminé</Badge>}
+          <Label>Traçabilité (Historique indélébile)</Label>
+          <div className="space-y-1">
+            <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>REJETÉ LE {essai.dateRejet} - TRACE PERMANENTE</Badge>
+            <div>
+              {essai.statut === 'attente' && essai.statut_validation === 'rejected' && <Badge style={{ backgroundColor: '#FFC107', color: '#FFFFFF' }}>Statut actuel: En attente de correction</Badge>}
+              {essai.statut === 'en_cours' && <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>Statut actuel: Correction en cours</Badge>}
+              {essai.statut === 'termine' && essai.statut_validation === 'accepted' && <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>Statut actuel: Corrigé et accepté</Badge>}
+              {essai.statut === 'termine' && essai.statut_validation !== 'accepted' && <Badge style={{ backgroundColor: '#FD7E14', color: '#FFFFFF' }}>Statut actuel: Corrigé, en attente validation</Badge>}
+            </div>
           </div>
         </div>
 
@@ -445,6 +520,185 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
             </p>
           </div>
         )}
+      </div>
+
+      {/* Résultats modifiables même en attente */}
+      <div className="space-y-4">
+        <h3 className="font-semibold">Résultats (Modification autorisée)</h3>
+
+        {essai.type === 'AG' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="pourcent_inf_2mm">% passant à 2mm *</Label>
+              <Input
+                id="pourcent_inf_2mm"
+                type="number"
+                step="0.1"
+                value={formData.pourcent_inf_2mm || ''}
+                onChange={(e) => setFormData({ ...formData, pourcent_inf_2mm: e.target.value })}
+                placeholder="Ex: 85.5"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pourcent_inf_80um">% passant à 80µm</Label>
+              <Input
+                id="pourcent_inf_80um"
+                type="number"
+                step="0.1"
+                value={formData.pourcent_inf_80um || ''}
+                onChange={(e) => setFormData({ ...formData, pourcent_inf_80um: e.target.value })}
+                placeholder="Ex: 45.2"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="coefficient_uniformite">Coefficient d'uniformité (Cu)</Label>
+              <Input
+                id="coefficient_uniformite"
+                type="number"
+                step="0.01"
+                value={formData.coefficient_uniformite || ''}
+                onChange={(e) => setFormData({ ...formData, coefficient_uniformite: e.target.value })}
+                placeholder="Ex: 6.5"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+          </>
+        )}
+
+        {essai.type === 'Proctor' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="type_proctor">Type Proctor</Label>
+              <Input
+                id="type_proctor"
+                value={formData.type_proctor || 'Normal'}
+                onChange={(e) => setFormData({ ...formData, type_proctor: e.target.value })}
+                placeholder="Normal ou Modifié"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="densite_opt">Densité sèche optimale (g/cm³) *</Label>
+              <Input
+                id="densite_opt"
+                type="number"
+                step="0.01"
+                value={formData.densite_opt || ''}
+                onChange={(e) => setFormData({ ...formData, densite_opt: e.target.value })}
+                placeholder="Ex: 1.95"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="teneur_eau_opt">Teneur en eau optimale (%) *</Label>
+              <Input
+                id="teneur_eau_opt"
+                type="number"
+                step="0.1"
+                value={formData.teneur_eau_opt || ''}
+                onChange={(e) => setFormData({ ...formData, teneur_eau_opt: e.target.value })}
+                placeholder="Ex: 12.5"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+          </>
+        )}
+
+        {essai.type === 'CBR' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="cbr_95">CBR à 95% OPM (%) *</Label>
+              <Input
+                id="cbr_95"
+                type="number"
+                value={formData.cbr_95 || ''}
+                onChange={(e) => setFormData({ ...formData, cbr_95: e.target.value })}
+                placeholder="Ex: 45"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cbr_98">CBR à 98% OPM (%)</Label>
+              <Input
+                id="cbr_98"
+                type="number"
+                value={formData.cbr_98 || ''}
+                onChange={(e) => setFormData({ ...formData, cbr_98: e.target.value })}
+                placeholder="Ex: 65"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cbr_100">CBR à 100% OPM (%)</Label>
+              <Input
+                id="cbr_100"
+                type="number"
+                value={formData.cbr_100 || ''}
+                onChange={(e) => setFormData({ ...formData, cbr_100: e.target.value })}
+                placeholder="Ex: 85"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gonflement">Gonflement (%)</Label>
+              <Input
+                id="gonflement"
+                type="number"
+                step="0.01"
+                value={formData.gonflement || ''}
+                onChange={(e) => setFormData({ ...formData, gonflement: e.target.value })}
+                placeholder="Ex: 0.5"
+                disabled={essai.statut === 'termine'}
+              />
+            </div>
+          </>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="commentaires">Commentaires et observations</Label>
+          <Textarea
+            id="commentaires"
+            value={formData.commentaires}
+            onChange={(e) => setFormData({ ...formData, commentaires: e.target.value })}
+            placeholder="Observations et remarques sur l'essai..."
+            rows={3}
+            disabled={essai.statut === 'termine'}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Nouveau fichier (Word/Excel)</Label>
+          <div>
+            <input
+              type="file"
+              id="new-file-upload"
+              accept=".docx,.xlsx,.pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setNewFileSelected(true);
+                  toast.success('Nouveau fichier sélectionné');
+                }
+              }}
+              style={{ display: 'none' }}
+              disabled={essai.statut === 'termine'}
+            />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => document.getElementById('new-file-upload')?.click()}
+              disabled={essai.statut === 'termine'}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Charger un nouveau fichier
+            </Button>
+          </div>
+          <p className="text-xs" style={{ color: '#A9A9A9' }}>
+            Formats acceptés: .docx, .xlsx - Remplace le fichier précédent
+          </p>
+        </div>
       </div>
 
       {essai.statut !== 'attente' && (
@@ -618,10 +872,14 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
       )}
 
       <div className="flex gap-3 justify-end pt-4">
-        {essai.statut === 'attente' && formData.operateur && formData.dateDebut && (
-          <Button onClick={handleDemarrer} style={{ backgroundColor: '#003366' }}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Redémarrer l'essai
+        {essai.statut === 'attente' && newFileSelected && (
+          <Button 
+            onClick={handleDemarrer}
+            disabled={!formData.operateur || !formData.dateDebut}
+            style={{ backgroundColor: '#003366' }}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Envoyer à la décodification
           </Button>
         )}
 
@@ -634,8 +892,8 @@ function EssaiRejeteForm({ essai, onClose }: { essai: EssaiTest; onClose: () => 
 
         {essai.statut === 'termine' && (
           <Button onClick={handleTerminer} style={{ backgroundColor: '#28A745' }}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Re-valider l'essai
+            <Send className="h-4 w-4 mr-2" />
+            Renvoyer à la décodification
           </Button>
         )}
       </div>

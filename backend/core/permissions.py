@@ -88,12 +88,20 @@ class CanManageEchantillons(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         
-        # Les réceptionnistes peuvent modifier en phase de stockage
-        if request.user.role == 'receptionniste' and obj.statut in ['attente', 'stockage']:
+        # Les réceptionnistes peuvent modifier en phase de stockage et envoyer au traitement
+        if request.user.role == 'receptionniste' and obj.statut in ['attente', 'stockage', 'decodification']:
             return True
         
         # Les responsables matériaux peuvent modifier en stockage
         if request.user.role == 'responsable_materiaux' and obj.statut == 'stockage':
+            return True
+        
+        # Les opérateurs peuvent changer le statut à decodification (y compris pour les essais rejetés)
+        if request.user.role in ['operateur_route', 'operateur_mecanique'] and obj.statut in ['stockage', 'essais', 'attente', 'decodification']:
+            return True
+        
+        # Le responsable traitement peut modifier les échantillons en décodification
+        if request.user.role == 'responsable_traitement' and obj.statut in ['decodification', 'traitement']:
             return True
         
         return False
@@ -110,9 +118,9 @@ class CanManageEssais(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         
-        # Les opérateurs peuvent créer et modifier les essais
+        # Les opérateurs, responsables et réceptionnistes peuvent créer et modifier les essais
         return request.user.role in ['operateur_route', 'operateur_mecanique', 
-                                     'responsable_materiaux']
+                                     'responsable_materiaux', 'receptionniste']
     
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
@@ -123,6 +131,10 @@ class CanManageEssais(permissions.BasePermission):
             return True
         
         if request.user.role == 'operateur_mecanique' and obj.section == 'mecanique':
+            return True
+        
+        # Les responsables matériaux et réceptionnistes peuvent modifier pour la planification
+        if request.user.role in ['responsable_materiaux', 'receptionniste']:
             return True
         
         return False

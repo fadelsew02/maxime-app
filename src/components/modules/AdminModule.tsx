@@ -1,26 +1,175 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { BarChart3, TrendingUp, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
+import { BarChart3, TrendingUp, Clock, CheckCircle, XCircle, Package, TestTube, FileCheck } from 'lucide-react';
 import { getEchantillons, getEssais } from '../../lib/mockData';
 
 export function AdminModule() {
   const [periodeFilter, setPeriodeFilter] = useState<'semaine' | 'mois' | 'annee'>('mois');
+  const [stats, setStats] = useState({
+    enStockage: 0,
+    essaisEnCoursRoute: 0,
+    essaisEnCoursMeca: 0,
+    enValidation: 0,
+    rapportsValides: 0,
+    rapportsRejetes: 0,
+  });
 
   const echantillons = getEchantillons();
   const essais = getEssais();
+  const [echantillonsAPI, setEchantillonsAPI] = useState<any[]>([]);
 
-  // Statistiques
-  const stats = {
-    total: echantillons.length,
-    enAttente: echantillons.filter(e => e.statut === 'stockage').length,
-    enCours: echantillons.filter(e => e.statut === 'essais').length,
-    enValidation: echantillons.filter(e => e.statut === 'validation' || e.statut === 'traitement').length,
-    valides: echantillons.filter(e => e.statut === 'valide').length,
-    rejetes: echantillons.filter(e => e.statut === 'rejete').length,
-  };
+  // Charger les échantillons depuis l'API
+  useEffect(() => {
+    const loadEchantillonsAPI = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json();
+        setEchantillonsAPI(data.results || []);
+      } catch (e) {
+        console.log('API non disponible');
+      }
+    };
+    loadEchantillonsAPI();
+  }, []);
+
+  useEffect(() => {
+    const calculerStats = () => {
+
+      // Fusionner échantillons localStorage + API
+      const allEchantillons = [...echantillons, ...echantillonsAPI];
+      
+      // Debug: afficher les statuts uniques
+      const statutsUniques = [...new Set(allEchantillons.map(e => e.statut))];
+      console.log('Statuts trouvés:', statutsUniques);
+      console.log('Total échantillons:', allEchantillons.length);
+      
+      // Debug: afficher les échantillons avec leurs essais
+      allEchantillons.forEach(e => {
+        const essais = e.essais_types || e.essais || [];
+        if (essais.length > 0) {
+          console.log(`Échantillon ${e.code}: statut=${e.statut}, essais=${JSON.stringify(essais)}`);
+        }
+      });
+
+      // 1. Nombre d'échantillons en stockage
+      const enStockage = allEchantillons.filter(e => 
+        e.statut === 'stockage' || e.statut === 'attente' || e.statut === 'En attente'
+      ).length;
+
+      // 2. Nombre d'essais en cours par section
+      // Inclure tous les échantillons qui ont des essais (pas seulement ceux avec statut "en cours")
+      const essaisEnCoursRoute = allEchantillons.filter(e => {
+        const essais = e.essais_types || e.essais || [];
+        const hasRouteEssais = essais.some((essai: string) => ['AG', 'Proctor', 'CBR'].includes(essai));
+        // Inclure si l'échantillon a des essais Route ET n'est pas encore validé
+        const notCompleted = !['valide', 'Validé', 'completed', 'Terminé'].includes(e.statut);
+        return hasRouteEssais && notCompleted;
+      }).length;
+      
+      const essaisEnCoursMeca = allEchantillons.filter(e => {
+        const essais = e.essais_types || e.essais || [];
+        const hasMecaEssais = essais.some((essai: string) => ['Oedometre', 'Cisaillement'].includes(essai));
+        // Inclure si l'échantillon a des essais Méca ET n'est pas encore validé
+        const notCompleted = !['valide', 'Validé', 'completed', 'Terminé'].includes(e.statut);
+        return hasMecaEssais && notCompleted;
+      }).length;
+
+      // 3. Nombre de rapports en validation (acceptés par Chef Projet, en attente Chef Service)
+      let enValidation = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sent_to_chef_service_')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            try {
+              const rapportData = JSON.parse(data);
+              if (!rapportData.acceptedByChefService && !rapportData.rejectedByChefService) {
+                enValidation++;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      // 4. Nombre de rapports validés par le Chef Service
+      let rapportsValides = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sent_to_chef_service_')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            try {
+              const rapportData = JSON.parse(data);
+              if (rapportData.acceptedByChefService === true) {
+                rapportsValides++;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      // 5. Nombre de rapports rejetés (tous niveaux)
+      let rapportsRejetes = 0;
+      // Rejetés par Chef Projet
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sent_to_chef_')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            try {
+              const rapportData = JSON.parse(data);
+              if (rapportData.rejected === true || rapportData.rejectedByChefService === true) {
+                rapportsRejetes++;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      // Rejetés par Directeur Technique
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sent_to_directeur_technique_')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            try {
+              const rapportData = JSON.parse(data);
+              if (rapportData.rejectedByDirecteurTechnique === true) {
+                rapportsRejetes++;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      console.log('Stats calculées:', {
+        enStockage,
+        essaisEnCoursRoute,
+        essaisEnCoursMeca,
+        enValidation,
+        rapportsValides,
+        rapportsRejetes,
+      });
+      
+      setStats({
+        enStockage,
+        essaisEnCoursRoute,
+        essaisEnCoursMeca,
+        enValidation,
+        rapportsValides,
+        rapportsRejetes,
+      });
+    };
+
+    calculerStats();
+  }, [echantillons, echantillonsAPI]);
 
   const getStatusLabel = (statut: string) => {
     const labels: Record<string, string> = {
@@ -70,55 +219,81 @@ export function AdminModule() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Total échantillons</CardTitle>
-            <Package className="h-4 w-4" style={{ color: '#003366' }} />
+            <CardTitle className="text-sm">En stockage</CardTitle>
+            <Package className="h-4 w-4" style={{ color: '#17A2B8' }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{stats.total}</div>
+            <div className="text-2xl">{stats.enStockage}</div>
             <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Tous statuts confondus
+              Échantillons en attente
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">En cours</CardTitle>
-            <Clock className="h-4 w-4" style={{ color: '#FFC107' }} />
+            <CardTitle className="text-sm">En cours Route</CardTitle>
+            <TestTube className="h-4 w-4" style={{ color: '#003366' }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{stats.enCours + stats.enValidation}</div>
+            <div className="text-2xl">{stats.essaisEnCoursRoute}</div>
             <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              En traitement
+              AG, Proctor, CBR
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Validés</CardTitle>
+            <CardTitle className="text-sm">En cours Méca-Sol</CardTitle>
+            <TestTube className="h-4 w-4" style={{ color: '#6F42C1' }} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl">{stats.essaisEnCoursMeca}</div>
+            <p className="text-xs" style={{ color: '#A9A9A9' }}>
+              Oedométrique, Cisaillement
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm">En validation</CardTitle>
+            <FileCheck className="h-4 w-4" style={{ color: '#FFC107' }} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl">{stats.enValidation}</div>
+            <p className="text-xs" style={{ color: '#A9A9A9' }}>
+              En attente Chef Service
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm">Rapports validés</CardTitle>
             <CheckCircle className="h-4 w-4" style={{ color: '#28A745' }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{stats.valides}</div>
+            <div className="text-2xl">{stats.rapportsValides}</div>
             <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Rapports finalisés
+              Validés par Chef Service
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Rejetés</CardTitle>
+            <CardTitle className="text-sm">Rapports rejetés</CardTitle>
             <XCircle className="h-4 w-4" style={{ color: '#DC3545' }} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{stats.rejetes}</div>
+            <div className="text-2xl">{stats.rapportsRejetes}</div>
             <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Nécessitent révision
+              Tous niveaux
             </p>
           </CardContent>
         </Card>
@@ -142,11 +317,12 @@ export function AdminModule() {
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { etape: 'Stockage', count: stats.enAttente, color: '#FFC107' },
-                  { etape: 'Essais en cours', count: stats.enCours, color: '#003366' },
+                  { etape: 'Stockage', count: stats.enStockage, color: '#17A2B8' },
+                  { etape: 'En cours Route', count: stats.essaisEnCoursRoute, color: '#003366' },
+                  { etape: 'En cours Méca-Sol', count: stats.essaisEnCoursMeca, color: '#6F42C1' },
                   { etape: 'En validation', count: stats.enValidation, color: '#FFC107' },
-                  { etape: 'Validés', count: stats.valides, color: '#28A745' },
-                  { etape: 'Rejetés', count: stats.rejetes, color: '#DC3545' },
+                  { etape: 'Rapports validés', count: stats.rapportsValides, color: '#28A745' },
+                  { etape: 'Rapports rejetés', count: stats.rapportsRejetes, color: '#DC3545' },
                 ].map((item) => (
                   <div key={item.etape} className="flex items-center justify-between p-4 rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
                     <div className="flex items-center gap-4">

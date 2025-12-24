@@ -70,6 +70,7 @@ export function AppSidebar({ user, activeView, onNavigate, onLogout }: AppSideba
       return [
         { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
         { id: 'essais-mecanique' as ActiveView, label: 'Essais - Mécanique', icon: TestTube },
+        { id: 'essais-rejetes-mecanique' as ActiveView, label: 'Essais Rejetés', icon: TestTube },
       ];
     }
 
@@ -78,14 +79,59 @@ export function AppSidebar({ user, activeView, onNavigate, onLogout }: AppSideba
       return [
         { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
         { id: 'traitement' as ActiveView, label: 'Traitement', icon: FileText },
+        { id: 'traitement-rejete' as ActiveView, label: 'Traitement rejeté', icon: FileText },
       ];
     }
 
-    // Hiérarchie de validation
-    if (['chef_projet', 'chef_service', 'directeur_technique', 'directeur_general'].includes(role)) {
+    // Chef de projet
+    if (role === 'chef_projet') {
+      return [
+        { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
+        { id: 'chef-projet' as ActiveView, label: 'Rapports traitement', icon: FileText },
+        { id: 'chef-projet-rejete' as ActiveView, label: 'Rapports rejetés', icon: FileText },
+        { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
+      ];
+    }
+
+    // Chef de service
+    if (role === 'chef_service') {
+      return [
+        { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
+        { id: 'rapports-chef-service' as ActiveView, label: 'Rapports', icon: FileText },
+        { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
+      ];
+    }
+
+    // Directeur technique
+    if (role === 'directeur_technique') {
       return [
         { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
         { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
+        { id: 'rapports-valides' as ActiveView, label: 'Rapport', icon: FileText },
+      ];
+    }
+
+    // Directeur général
+    if (role === 'directeur_general') {
+      return [
+        { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
+        { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
+      ];
+    }
+
+    // Directeur SNERTP
+    if (role === 'directeur_snertp') {
+      return [
+        { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
+        { id: 'rapports-valides' as ActiveView, label: 'Rapport à aviser', icon: FileText },
+      ];
+    }
+
+    // Service Marketing
+    if (role === 'service_marketing') {
+      return [
+        { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
+        { id: 'service-marketing' as ActiveView, label: 'Rapports à envoyer', icon: FileText },
       ];
     }
 

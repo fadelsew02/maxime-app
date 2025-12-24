@@ -21,8 +21,10 @@ export interface Echantillon {
   sondage: 'carotte' | 'vrac';
   nappe: string;
   essais: string[];
+  essaisDetails?: any[]; // Détails complets des essais avec dates
   qrCode: string;
   dateReception: string;
+  dateEnvoiEssais?: string;
   dateFinEstimee: string;
   statut: 'attente' | 'stockage' | 'essais' | 'decodification' | 'traitement' | 'validation' | 'valide' | 'rejete';
   priorite?: 'normale' | 'urgente';
@@ -53,322 +55,58 @@ export interface EssaiTest {
   wasResumed?: boolean; // Indique si l'essai a été repris après rejet
 }
 
-// Données mockées
-let clients: Client[] = [
-  {
-    id: '1',
-    code: 'CLI-001',
-    nom: 'SOGEA-SATOM',
-    contact: 'M. Koné',
-    projet: 'Autoroute Abidjan-Grand Bassam',
-    email: 'kone@sogea-satom.com',
-    telephone: '+225 07 00 00 01',
-    dateCreation: '2025-01-15',
-  },
-  {
-    id: '2',
-    code: 'CLI-002',
-    nom: 'Bouygues TP',
-    contact: 'Mme Traoré',
-    projet: 'Pont 3ème Pont',
-    email: 'traore@bouygues.com',
-    telephone: '+225 07 00 00 02',
-    dateCreation: '2025-02-01',
-  },
-];
+// Données vides - tout sera chargé depuis localStorage
+let clients: Client[] = [];
+let echantillons: Echantillon[] = [];
 
-let echantillons: Echantillon[] = [
-  {
-    id: '1',
-    code: 'S-0001/25',
-    clientCode: 'CLI-001',
-    nature: 'Sol argileux',
-    profondeurDebut: '0',
-    profondeurFin: '2',
-    sondage: 'carotte',
-    nappe: 'Non rencontrée',
-    essais: ['AG', 'Proctor', 'CBR'],
-    qrCode: 'QR-S-0001-25',
-    dateReception: '2025-10-15',
-    dateFinEstimee: '2025-10-25',
-    statut: 'validation',
-    priorite: 'urgente',
-    chefProjet: 'Ing. Kouadio',
-  },
-  {
-    id: '2',
-    code: 'S-0002/25',
-    clientCode: 'CLI-002',
-    nature: 'Sol sableux',
-    profondeurDebut: '2',
-    profondeurFin: '4',
-    sondage: 'vrac',
-    nappe: '3.5m',
-    essais: ['Oedometre', 'Cisaillement'],
-    qrCode: 'QR-S-0002-25',
-    dateReception: '2025-10-16',
-    dateFinEstimee: '2025-11-05',
-    statut: 'validation',
-    chefProjet: 'Ing. Diallo',
-  },
-  {
-    id: '3',
-    code: 'S-0003/25',
-    clientCode: 'CLI-001',
-    nature: 'Sol limoneux',
-    profondeurDebut: '0',
-    profondeurFin: '3',
-    sondage: 'carotte',
-    nappe: '2.5m',
-    essais: ['AG', 'Proctor'],
-    qrCode: 'QR-S-0003-25',
-    dateReception: '2025-10-17',
-    dateFinEstimee: '2025-10-28',
-    statut: 'validation',
-    priorite: 'normale',
-    chefProjet: 'Ing. Kouadio',
-  },
-  {
-    id: '4',
-    code: 'S-0004/25',
-    clientCode: 'CLI-002',
-    nature: 'Roche',
-    profondeurDebut: '1',
-    profondeurFin: '5',
-    sondage: 'carotte',
-    nappe: 'Non rencontrée',
-    essais: ['CBR', 'Cisaillement'],
-    qrCode: 'QR-S-0004-25',
-    dateReception: '2025-10-18',
-    dateFinEstimee: '2025-11-10',
-    statut: 'validation',
-    priorite: 'urgente',
-    chefProjet: 'Ing. Touré',
-  },
-];
-
-let essais: EssaiTest[] = [
-  {
-    id: '1',
-    echantillonCode: 'S-0001/25',
-    type: 'AG',
-    section: 'route',
-    dateReception: '2025-10-16',
-    dateDebut: '2025-10-17',
-    dateFin: '2025-10-21',
-    operateur: 'Kouassi Jean',
-    statut: 'termine',
-    resultats: {
-      pourcent_inf_2mm: '85.5',
-      pourcent_inf_80um: '45.2',
-      coefficient_uniformite: '6.5',
-    },
-    commentaires: 'Essai terminé avec succès',
-    statutValidation: 'accepted',
-    dureeEstimee: 5,
-    fichier: 'AG_S-0001-25_Resultats.pdf',
-  },
-  {
-    id: '2',
-    echantillonCode: 'S-0001/25',
-    type: 'Proctor',
-    section: 'route',
-    dateReception: '2025-10-16',
-    dateDebut: '2025-10-18',
-    dateFin: '2025-10-22',
-    operateur: 'Marie Dupont',
-    statut: 'termine',
-    resultats: {
-      densite_opt: '1.95',
-      teneur_eau_opt: '12.5',
-      type_proctor: 'Normal',
-    },
-    commentaires: 'Résultats optimaux obtenus',
-    statutValidation: 'accepted',
-    dureeEstimee: 4,
-    fichier: 'Proctor_S-0001-25_Resultats.pdf',
-  },
-  {
-    id: '3',
-    echantillonCode: 'S-0001/25',
-    type: 'CBR',
-    section: 'route',
-    dateReception: '2025-10-16',
-    dateDebut: '2025-10-19',
-    dateFin: '2025-10-24',
-    operateur: 'Pierre Martin',
-    statut: 'termine',
-    resultats: {
-      cbr_95: '45',
-      cbr_98: '65',
-      cbr_100: '85',
-      gonflement: '0.5',
-    },
-    commentaires: 'Essai CBR réalisé selon normes',
-    statutValidation: 'accepted',
-    dureeEstimee: 5,
-    fichier: 'CBR_S-0001-25_Resultats.pdf',
-  },
-  {
-    id: '4',
-    echantillonCode: 'S-0002/25',
-    type: 'Oedometre',
-    section: 'mecanique',
-    dateReception: '2025-10-17',
-    dateDebut: '2025-10-18',
-    dateFin: '2025-11-02',
-    operateur: 'Sophie Bernard',
-    statut: 'termine',
-    resultats: {
-      module_young: '15000',
-      coefficient_poisson: '0.35',
-      contrainte_preconsolidation: '120',
-    },
-    commentaires: 'Essai oedométrique terminé',
-    statutValidation: 'accepted',
-    dureeEstimee: 18,
-    fichier: 'Oedometre_S-0002-25_Resultats.pdf',
-  },
-  {
-    id: '5',
-    echantillonCode: 'S-0002/25',
-    type: 'Cisaillement',
-    section: 'mecanique',
-    dateReception: '2025-10-17',
-    dateDebut: '2025-10-20',
-    dateFin: '2025-10-28',
-    operateur: 'Luc Dubois',
-    statut: 'termine',
-    resultats: {
-      cohesion: '15',
-      angle_frottement: '28',
-      resistance_cisaillement: '42',
-    },
-    commentaires: 'Essai de cisaillement terminé',
-    statutValidation: 'accepted',
-    dureeEstimee: 8,
-    fichier: 'Cisaillement_S-0002-25_Resultats.pdf',
-  },
-  {
-    id: '6',
-    echantillonCode: 'S-0003/25',
-    type: 'AG',
-    section: 'route',
-    dateReception: '2025-10-18',
-    dateDebut: '2025-10-19',
-    dateFin: '2025-10-23',
-    operateur: 'Alice Moreau',
-    statut: 'termine',
-    resultats: {
-      pourcent_inf_2mm: '78.3',
-      pourcent_inf_80um: '38.7',
-      coefficient_uniformite: '5.2',
-    },
-    commentaires: 'Résultats conformes',
-    statutValidation: 'accepted',
-    dureeEstimee: 5,
-    fichier: 'AG_S-0003-25_Resultats.pdf',
-  },
-  {
-    id: '7',
-    echantillonCode: 'S-0003/25',
-    type: 'Proctor',
-    section: 'route',
-    dateReception: '2025-10-18',
-    dateDebut: '2025-10-20',
-    dateFin: '2025-10-24',
-    operateur: 'Thomas Petit',
-    statut: 'termine',
-    resultats: {
-      densite_opt: '1.88',
-      teneur_eau_opt: '14.2',
-      type_proctor: 'Normal',
-    },
-    commentaires: 'Essai Proctor réussi',
-    statutValidation: 'accepted',
-    dureeEstimee: 4,
-    fichier: 'Proctor_S-0003-25_Resultats.pdf',
-  },
-  {
-    id: '8',
-    echantillonCode: 'S-0004/25',
-    type: 'CBR',
-    section: 'route',
-    dateReception: '2025-10-19',
-    dateDebut: '2025-10-20',
-    dateFin: '2025-10-25',
-    operateur: 'Emma Leroy',
-    statut: 'termine',
-    resultats: {
-      cbr_95: '52',
-      cbr_98: '72',
-      cbr_100: '92',
-      gonflement: '0.3',
-    },
-    commentaires: 'CBR sur roche - valeurs élevées',
-    statutValidation: 'accepted',
-    dureeEstimee: 5,
-    fichier: 'CBR_S-0004-25_Resultats.pdf',
-  },
-  {
-    id: '9',
-    echantillonCode: 'S-0004/25',
-    type: 'Cisaillement',
-    section: 'mecanique',
-    dateReception: '2025-10-19',
-    dateDebut: '2025-10-22',
-    dateFin: '2025-10-30',
-    operateur: 'Nicolas Roux',
-    statut: 'termine',
-    resultats: {
-      cohesion: '25',
-      angle_frottement: '35',
-      resistance_cisaillement: '60',
-    },
-    commentaires: 'Essai sur roche - résistance élevée',
-    statutValidation: 'accepted',
-    dureeEstimee: 8,
-    fichier: 'Cisaillement_S-0004-25_Resultats.pdf',
-  },
-  // Essai rejeté pour démonstration
-  {
-    id: '10',
-    echantillonCode: 'S-0001/25',
-    type: 'AG',
-    section: 'route',
-    dateReception: '2025-10-16',
-    dateDebut: '2025-10-17',
-    dateFin: '2025-10-21',
-    dateRejet: '2025-10-22',
-    operateur: 'Kouassi Jean',
-    statut: 'termine',
-    resultats: {
-      pourcent_inf_2mm: '85.5',
-      pourcent_inf_80um: '45.2',
-      coefficient_uniformite: '6.5',
-    },
-    commentaires: 'Essai terminé avec succès',
-    statutValidation: 'rejected',
-    commentairesValidation: 'Valeurs d\'analyse granulométrique incohérentes - vérification requise',
-    dureeEstimee: 5,
-    fichier: 'AG_S-0001-25_Resultats.pdf',
-  },
-];
+let essais: EssaiTest[] = [];
 
 // Fonctions d'accès et manipulation
-export const getClients = () => clients;
-export const getClient = (code: string) => clients.find(c => c.code === code);
+export const getClients = () => {
+  // Charger les clients depuis localStorage
+  try {
+    const savedClients = localStorage.getItem('clients');
+    if (savedClients && savedClients !== 'null') {
+      const parsedClients = JSON.parse(savedClients);
+      if (Array.isArray(parsedClients)) {
+        clients = parsedClients;
+      }
+    }
+  } catch (e) {
+    console.error('Erreur lors du chargement des clients:', e);
+  }
+  return clients;
+};
+
+export const getClient = (code: string) => getClients().find(c => c.code === code);
+
 export const addClient = (client: Client) => {
   clients.push(client);
+  localStorage.setItem('clients', JSON.stringify(clients));
   return client;
 };
 
-export const getEchantillons = () => echantillons;
+export const getEchantillons = () => {
+  // Charger les échantillons depuis localStorage
+  try {
+    const savedEchantillons = localStorage.getItem('echantillons');
+    if (savedEchantillons && savedEchantillons !== 'null') {
+      const parsedEchantillons = JSON.parse(savedEchantillons);
+      if (Array.isArray(parsedEchantillons)) {
+        echantillons = parsedEchantillons;
+      }
+    }
+  } catch (e) {
+    console.error('Erreur lors du chargement des échantillons:', e);
+  }
+  return echantillons;
+};
 export const getEchantillon = (code: string) => echantillons.find(e => e.code === code);
 export const getEchantillonsByClient = (clientCode: string) => 
   echantillons.filter(e => e.clientCode === clientCode);
 export const addEchantillon = (echantillon: Echantillon) => {
   echantillons.push(echantillon);
+  localStorage.setItem('echantillons', JSON.stringify(echantillons));
   return echantillon;
 };
 export const updateEchantillon = (code: string, updates: Partial<Echantillon>) => {
@@ -451,16 +189,8 @@ export const calculateReturnDate = (dateEnvoi: string, essaisTypes: string[], pr
 
 // Liste des natures d'échantillons disponibles
 export const naturesEchantillons = [
-  'Sol argileux',
-  'Sol sableux',
-  'Sol limoneux',
-  'Sol graveleux',
-  'Roche',
-  'Latérite',
-  'Argile',
-  'Sable',
+  'Sol',
   'Gravier',
-  'Tout-venant',
 ];
 
 // Liste des chefs de projet

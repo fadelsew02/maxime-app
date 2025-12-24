@@ -1,434 +1,489 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
+import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { FileDown, Send, FileText, Upload, CheckCircle, XCircle, Download } from 'lucide-react';
+import { FileText, Upload, Send, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { getEchantillons, getClient, updateEchantillon, getEssaisByEchantillon, Echantillon } from '../../lib/mockData';
+import { workflowApi } from '../../lib/workflowApi';
+import { EchantillonDetails } from './TraitementModule_components';
 
-export function TraitementModule() {
-  const [echantillons, setEchantillons] = useState(() =>
-    getEchantillons().filter(e => e.statut === 'traitement')
-  );
-  const [selectedEchantillon, setSelectedEchantillon] = useState<Echantillon | null>(null);
+interface EssaiTraitement {
+  echantillonCode: string;
+  essaiType: string;
+  dateReception: string;
+  dateDebut: string;
+  dateFin: string;
+  operateur: string;
+  resultats: any;
+  commentaires: string;
+  fichier: string;
+  fichierData: string;
+  validationComment: string;
+  validationDate: string;
+  dateRejet: string | null;
+}
 
-  const handleEnvoiValidation = (code: string, chefProjet: string) => {
-    updateEchantillon(code, { statut: 'validation' });
-    toast.success(`Rapport envoyé en validation à ${chefProjet}`);
-    refreshEchantillons();
-    setSelectedEchantillon(null);
-  };
+interface EchantillonGroupe {
+  code: string;
+  chefProjet: string;
+  clientNom: string;
+  essais: EssaiTraitement[];
+}
 
-  const handleReject = (code: string) => {
-    updateEchantillon(code, { statut: 'decodification' });
-    toast.error(`Échantillon ${code} rejeté et renvoyé à la décodification`);
-    refreshEchantillons();
-    setSelectedEchantillon(null);
-  };
+interface ClientGroupe {
+  clientNom: string;
+  chefProjet: string;
+  echantillons: EchantillonGroupe[];
+  totalEssais: number;
+}
 
-  const refreshEchantillons = () => {
-    setEchantillons(getEchantillons().filter(e => e.statut === 'traitement'));
-  };
+function ClientCard({ client, onSelect }: { client: ClientGroupe; onSelect: (client: ClientGroupe) => void }) {
+  const [sentToChefProjet, setSentToChefProjet] = React.useState(false);
+  const [isRejected, setIsRejected] = React.useState(false);
+  const [rejectedEchantillons, setRejectedEchantillons] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    const checkSentStatus = async () => {
+      const rejected = new Set<string>();
+      for (const echantillon of client.echantillons) {
+        const workflow = await workflowApi.getByCode(echantillon.code);
+        if (workflow) {
+          if (workflow.statut_display === 'Rejeté') {
+            setIsRejected(true);
+            rejected.add(echantillon.code);
+          }
+          if (workflow.etape_actuelle !== 'traitement') {
+            setSentToChefProjet(true);
+          }
+        }
+      }
+      setRejectedEchantillons(rejected);
+    };
+    checkSentStatus();
+  }, [client.echantillons]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="font-semibold text-lg">{client.clientNom}</span>
+            {isRejected && (
+              <>
+                <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>
+                  Rejeté
+                </Badge>
+                <Badge style={{ backgroundColor: '#FF6B35', color: '#FFFFFF' }}>
+                  PRIORITÉ
+                </Badge>
+              </>
+            )}
+            <Badge variant="outline" style={{ borderColor: '#28A745', color: '#28A745' }}>
+              {client.echantillons.length} échantillon(s)
+            </Badge>
+          </div>
+          <div className="text-sm space-y-1 mb-3" style={{ color: '#6C757D' }}>
+            <div className="flex items-center gap-2">
+              <p>Chef de projet: {client.chefProjet}</p>
+              {isRejected && (
+                <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF', fontSize: '11px' }}>
+                  REJETÉ
+                </Badge>
+              )}
+            </div>
+            {isRejected ? (
+              <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>
+                Rejeté
+              </Badge>
+            ) : sentToChefProjet ? (
+              <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
+                Envoyé au chef projet
+              </Badge>
+            ) : (
+              <p>{client.totalEssais} essai(s) accepté(s)</p>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {client.echantillons.map((ech) => (
+              <div key={ech.code} className="flex items-center gap-1">
+                <Badge style={{ backgroundColor: '#6C757D', color: '#FFFFFF' }}>
+                  {ech.code}
+                </Badge>
+                {rejectedEchantillons.has(ech.code) && (
+                  <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF', fontSize: '10px' }}>
+                    Rejeté
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => onSelect(client)}>
+          <FileText className="h-4 w-4 mr-2" />
+          Voir détails
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ClientRejetCard({ client, onSelect }: { client: ClientGroupe; onSelect: (client: ClientGroupe) => void }) {
+  return (
+    <div className="p-4 rounded-lg" style={{ backgroundColor: '#FFF3CD', borderLeft: '4px solid #DC3545' }}>
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="font-semibold text-lg">{client.clientNom}</span>
+            <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>
+              Rejeté
+            </Badge>
+          </div>
+          <div className="text-sm space-y-1 mb-3" style={{ color: '#6C757D' }}>
+            <p>Chef de projet: {client.chefProjet}</p>
+            <p>{client.echantillons.length} échantillon(s) rejeté(s)</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {client.echantillons.map((ech) => (
+              <Badge 
+                key={ech.code}
+                style={{ backgroundColor: '#6C757D', color: '#FFFFFF' }}
+              >
+                {ech.code}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => onSelect(client)}>
+          <FileText className="h-4 w-4 mr-2" />
+          Voir détails
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function TraitementModule() {
+  const [clients, setClients] = useState<ClientGroupe[]>([]);
+  const [clientsRejetes, setClientsRejetes] = useState<ClientGroupe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClient, setSelectedClient] = useState<ClientGroupe | null>(null);
+
+  const loadEssais = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/echantillons/traitement_groupes_par_client/', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const clientsData = await response.json();
+      
+      setClients(clientsData);
+      setClientsRejetes([]);
+    } catch (error) {
+      console.error('Erreur chargement:', error);
+      toast.error('Erreur lors du chargement');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEssais();
+  }, []);
+
+  return (
+    <div className="p-8 bg-background">
       <div className="mb-8">
         <h1>Module Traitement</h1>
         <p style={{ color: '#A9A9A9' }}>
-          
+          Essais acceptés en traitement - Regroupés par client
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Échantillons en traitement</CardTitle>
-          <CardDescription>
-            {echantillons.length} échantillon(s) à traiter
-          </CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Clients en traitement</CardTitle>
+              <CardDescription>
+                {clients.length} client(s) avec échantillons en traitement
+              </CardDescription>
+            </div>
+            <Button onClick={loadEssais} disabled={loading}>
+              {loading ? 'Chargement...' : 'Actualiser'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {echantillons.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <p className="mt-2 text-gray-500">Chargement...</p>
+              </div>
+            ) : clients.length === 0 ? (
               <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
-                Aucun échantillon en traitement
+                Aucun client en traitement
               </div>
             ) : (
-              echantillons.map((ech) => {
-                const client = getClient(ech.clientCode);
-
-                return (
-                  <div
-                    key={ech.id}
-                    className="p-4 rounded-lg"
-                    style={{ backgroundColor: '#F5F5F5' }}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span>{ech.code}</span>
-                          <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
-                            En traitement
-                          </Badge>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                          <div>
-                            <Label>Client</Label>
-                            <p>{client?.nom || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <Label>Contact</Label>
-                            <p>{client?.contact || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <Label>Projet</Label>
-                            <p>{client?.projet || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <Label>Nature</Label>
-                            <p>{ech.nature}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 mt-3">
-                          {ech.essais.map((essai) => (
-                            <Badge key={essai} variant="outline">
-                              {essai}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleReject(ech.code)}
-                          style={{ borderColor: '#DC3545', color: '#DC3545' }}
-                        >
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Rejeter
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => setSelectedEchantillon(ech)}
-                          style={{ backgroundColor: '#003366' }}
-                        >
-                          <FileDown className="h-4 w-4 mr-2" />
-                          Traiter
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              clients.map((client, index) => (
+                <ClientCard key={`${client.clientNom}_${index}`} client={client} onSelect={setSelectedClient} />
+              ))
             )}
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedEchantillon} onOpenChange={() => setSelectedEchantillon(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      {clientsRejetes.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Traitements rejetés</CardTitle>
+            <CardDescription>
+              {clientsRejetes.length} client(s) avec traitements rejetés
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {clientsRejetes.map((client, index) => (
+                <ClientRejetCard key={`${client.clientNom}_rejete_${index}`} client={client} onSelect={setSelectedClient} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
+        <DialogContent style={{ width: '900px', maxWidth: '95vw' }} className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Traitement de l'échantillon {selectedEchantillon?.code}</DialogTitle>
+            <DialogTitle>Traitement - {selectedClient?.clientNom}</DialogTitle>
             <DialogDescription>
-              Préparation du rapport et envoi au chef de projet
+              {selectedClient?.echantillons.length} échantillon(s) avec {selectedClient?.totalEssais} essai(s) accepté(s)
             </DialogDescription>
           </DialogHeader>
-          {selectedEchantillon && (
-            <TraitementDetails
-              echantillon={selectedEchantillon}
-              onEnvoi={handleEnvoiValidation}
-              onClose={() => setSelectedEchantillon(null)}
-            />
-          )}
+          {selectedClient && <ClientDetails client={selectedClient} onClose={() => setSelectedClient(null)} onSent={loadEssais} />}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function TraitementDetails({ echantillon, onEnvoi, onClose }: { echantillon: Echantillon; onEnvoi: (code: string, chef: string) => void; onClose: () => void }) {
-  const client = getClient(echantillon.clientCode);
-  const essais = getEssaisByEchantillon(echantillon.code);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [rejectionMotifs, setRejectionMotifs] = useState<Record<string, string>>({});
+function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onClose: () => void; onSent: () => void }) {
+  const [traitementFile, setTraitementFile] = useState<File | null>(null);
+  const [observations, setObservations] = useState<string>('');
+  const [sentToChefProjet, setSentToChefProjet] = useState(false);
+  const [selectedEchantillon, setSelectedEchantillon] = useState<EchantillonGroupe | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkIfAlreadySent = async () => {
+      try {
+        for (const echantillon of client.echantillons) {
+          const workflow = await workflowApi.getByCode(echantillon.code);
+          if (workflow && workflow.etape_actuelle !== 'traitement') {
+            setSentToChefProjet(true);
+            break;
+          }
+        }
+      } catch (error) {
+        console.error('Erreur vérification workflow:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkIfAlreadySent();
+  }, [client.echantillons]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setTraitementFile(file);
+      toast.success(`Fichier "${file.name}" chargé`);
+    }
+  };
+
+  const handleSendToChefProjet = async () => {
+    if (!traitementFile) {
+      toast.error('Veuillez charger un fichier avant d\'envoyer');
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = e.target?.result as string;
+
+        for (const echantillon of client.echantillons) {
+          const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${echantillon.code}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+          });
+          const echantillonData = await echantillonResponse.json();
+          const echantillonObj = echantillonData.results[0];
+          const echantillonId = echantillonObj?.id;
+
+          if (!echantillonId) {
+            toast.error(`Échantillon ${echantillon.code} introuvable`);
+            return;
+          }
+
+          const workflow = await workflowApi.create({
+            echantillon: echantillonId,
+            code_echantillon: echantillon.code,
+            client_name: client.clientNom,
+            etape_actuelle: 'chef_projet',
+            statut: 'en_attente',
+            file_data: base64Data,
+            file_name: traitementFile.name,
+            observations_traitement: observations
+          });
+
+          if (!workflow) {
+            toast.error(`Erreur lors de l'envoi de ${echantillon.code}`);
+            return;
+          }
+        }
+
+        setSentToChefProjet(true);
+        toast.success(`Rapport envoyé au chef de projet pour ${client.echantillons.length} échantillon(s)`);
+        onClose();
+        onSent(); // Ceci va recharger la liste et mettre à jour les badges
+      };
+      reader.readAsDataURL(traitementFile);
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error('Erreur de connexion au serveur');
+    }
+  };
+
+  if (selectedEchantillon) {
+    return <EchantillonDetails echantillon={selectedEchantillon} onBack={() => setSelectedEchantillon(null)} />;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Informations client et échantillon */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Informations Client</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <Label>Nom</Label>
-              <p>{client?.nom}</p>
-            </div>
-            <div>
-              <Label>Contact</Label>
-              <p>{client?.contact}</p>
-            </div>
-            <div>
-              <Label>Projet</Label>
-              <p>{client?.projet}</p>
-            </div>
-            <div>
-              <Label>Email</Label>
-              <p>{client?.email}</p>
-            </div>
-            <div>
-              <Label>Téléphone</Label>
-              <p>{client?.telephone}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Informations Échantillon</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <Label>Code</Label>
-              <p>{echantillon.code}</p>
-            </div>
-            <div>
-              <Label>Nature</Label>
-              <p>{echantillon.nature}</p>
-            </div>
-            <div>
-              <Label>Profondeurs</Label>
-              <p>{echantillon.profondeurDebut}m - {echantillon.profondeurFin}m</p>
-            </div>
-            <div>
-              <Label>Type sondage</Label>
-              <p>{echantillon.sondage === 'carotte' ? 'Carotté' : 'Vrac'}</p>
-            </div>
-            <div>
-              <Label>Nappe phréatique</Label>
-              <p>{echantillon.nappe || 'Non spécifiée'}</p>
-            </div>
-            <div>
-              <Label>Chef de projet</Label>
-              <p className="font-semibold" style={{ color: '#003366' }}>
-                {echantillon.chefProjet}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-2">
+        <Label>Client</Label>
+        <p className="font-semibold">{client.clientNom}</p>
+      </div>
+      <div className="space-y-2">
+        <Label>Chef de projet</Label>
+        <p>{client.chefProjet}</p>
       </div>
 
-      {/* Résultats des essais */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Résultats des Essais</CardTitle>
-          <CardDescription>
-            {essais.length} essai(s) réalisé(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {essais.map((essai) => (
-              <div key={essai.id} className="p-4 rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="font-semibold">{essai.type}</h4>
-                    <p className="text-sm" style={{ color: '#A9A9A9' }}>
-                      Opérateur: {essai.operateur}
-                    </p>
+      <div>
+        <h3 className="font-semibold mb-4">Échantillons ({client.echantillons.length})</h3>
+        <div className="space-y-3">
+          {client.echantillons.map((ech) => (
+            <div key={ech.code} className="p-3 rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
+              <div className="flex justify-between items-center">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="font-semibold">{ech.code}</span>
+                    <Badge variant="outline" style={{ borderColor: '#28A745', color: '#28A745' }}>
+                      {ech.essais.length} essai(s)
+                    </Badge>
                   </div>
-                  <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>
-                    Terminé
-                  </Badge>
-                </div>
-
-                {essai.resultats && Object.keys(essai.resultats).length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 text-sm mt-3">
-                    {Object.entries(essai.resultats).map(([key, value]) => (
-                      <div key={key}>
-                        <Label className="text-xs capitalize">
-                          {key.replace(/_/g, ' ')}
-                        </Label>
-                        <p className="font-semibold">{value || '-'}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {ech.essais.map((essai) => (
+                      <div key={essai.essaiType} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Badge 
+                          style={{ backgroundColor: '#28A745', color: '#FFFFFF', fontSize: '11px' }}
+                        >
+                          {essai.essaiType}
+                        </Badge>
+                        {essai.estRepris && (
+                          <Badge 
+                            style={{ backgroundColor: '#FD7E14', color: '#FFFFFF', fontSize: '9px', padding: '2px 6px' }}
+                          >
+                            REPRIS
+                          </Badge>
+                        )}
                       </div>
                     ))}
                   </div>
-                )}
-
-                {essai.commentaires && (
-                  <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E0E0E0' }}>
-                    <Label className="text-xs">Commentaires</Label>
-                    <p className="text-sm mt-1" style={{ color: '#A9A9A9' }}>
-                      {essai.commentaires}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 mt-3 text-xs" style={{ color: '#A9A9A9' }}>
-                  <span>Dates: {essai.dateDebut} → {essai.dateFin}</span>
                 </div>
-
-                {essai.fichier && (
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        // Simulation du téléchargement
-                        toast.success(`Téléchargement de ${essai.fichier} démarré`);
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Télécharger {essai.fichier}
-                    </Button>
-                  </div>
-                )}
-
-                <div className="flex gap-2 mt-3">
-                  <div className="flex-1">
-                    <Label className="text-xs">Motif de rejet (optionnel)</Label>
-                    <Input
-                      placeholder="Raison du rejet..."
-                      value={rejectionMotifs[essai.id] || ''}
-                      onChange={(e) => setRejectionMotifs(prev => ({ ...prev, [essai.id]: e.target.value }))}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    style={{ borderColor: '#DC3545', color: '#DC3545' }}
-                    onClick={() => {
-                      const motif = rejectionMotifs[essai.id];
-                      if (!motif) {
-                        toast.error('Veuillez saisir un motif de rejet');
-                        return;
-                      }
-                      // Logique pour rejeter cet essai spécifique
-                      toast.error(`Essai ${essai.type} rejeté: ${motif}`);
-                    }}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Rejeter
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    style={{ borderColor: '#28A745', color: '#28A745' }}
-                    onClick={() => {
-                      // Logique pour accepter cet essai spécifique
-                      toast.success(`Essai ${essai.type} accepté`);
-                    }}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Accepter
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Rapport technique</Label>
-            <Button variant="outline" className="w-full">
-              <FileDown className="h-4 w-4 mr-2" />
-              Télécharger le modèle de rapport
-            </Button>
-            <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Complétez le rapport avec les résultats ci-dessus
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Upload du rapport final</Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setUploadedFile(file);
-                    toast.success(`Fichier ${file.name} sélectionné`);
-                  }
-                }}
-                className="hidden"
-                id="file-upload"
-              />
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <Upload className="h-8 w-8 mx-auto mb-2" style={{ color: '#003366' }} />
-                <p className="text-sm">
-                  {uploadedFile ? uploadedFile.name : 'Cliquez pour sélectionner un fichier'}
-                </p>
-                <p className="text-xs" style={{ color: '#A9A9A9' }}>
-                  Formats acceptés: PDF, DOC, DOCX
-                </p>
-              </label>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
-            <div className="flex items-center gap-3 mb-2">
-              <FileText className="h-5 w-5" style={{ color: '#003366' }} />
-              <div className="flex-1">
-                <p className="font-semibold">Chef de projet assigné</p>
-                <p className="text-sm" style={{ color: '#A9A9A9' }}>
-                  {echantillon.chefProjet}
-                </p>
+                <Button size="sm" variant="outline" onClick={() => setSelectedEchantillon(ech)}>
+                  Ouvrir
+                </Button>
               </div>
             </div>
-            <p className="text-xs" style={{ color: '#A9A9A9' }}>
-              Le rapport sera envoyé à ce chef de projet pour validation
-            </p>
-          </div>
+          ))}
+        </div>
+      </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                // Logique pour rejeter l'échantillon entier
-                updateEchantillon(echantillon.code, { statut: 'decodification' });
-                toast.error(`Échantillon ${echantillon.code} rejeté et renvoyé à la décodification`);
-                onClose();
-              }}
-              style={{ borderColor: '#DC3545', color: '#DC3545' }}
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              Rejeter tout
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => {
-                if (!uploadedFile) {
-                  toast.error('Veuillez uploader le rapport final');
-                  return;
-                }
-                onEnvoi(echantillon.code, echantillon.chefProjet || '');
-              }}
-              style={{ backgroundColor: '#003366' }}
-              disabled={!uploadedFile}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Envoyer en validation
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4 pt-4 border-t">
+        <h3 className="font-semibold">Rapport de traitement groupé</h3>
+        <p className="text-sm" style={{ color: '#6C757D' }}>
+          Ce rapport sera envoyé pour tous les échantillons de {client.clientNom}
+        </p>
+        
+        <div className="space-y-2">
+          <Label>Fichier rapport</Label>
+          <input
+            type="file"
+            id="traitement-file"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+            disabled={sentToChefProjet}
+          />
+          <Button 
+            type="button"
+            variant="outline" 
+            size="sm" 
+            onClick={() => document.getElementById('traitement-file')?.click()}
+            disabled={sentToChefProjet}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {traitementFile ? 'Changer le fichier' : 'Sélectionner un fichier'}
+          </Button>
+          {traitementFile && (
+            <p className="text-xs mt-1 text-green-600">
+              ✓ {traitementFile.name}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Observations</Label>
+          <textarea
+            value={observations}
+            onChange={(e) => setObservations(e.target.value)}
+            placeholder="Renseignez vos observations sur le traitement..."
+            disabled={sentToChefProjet}
+            className="w-full min-h-[100px] p-3 border rounded-md resize-y"
+            style={{ 
+              borderColor: '#D1D5DB',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+
+        <Button
+          onClick={handleSendToChefProjet}
+          disabled={!traitementFile || sentToChefProjet || loading}
+          style={{ 
+            backgroundColor: sentToChefProjet ? '#6C757D' : '#003366',
+            color: '#FFFFFF'
+          }}
+          className="w-full"
+        >
+          <Send className="h-4 w-4 mr-2" />
+          {loading ? 'Vérification...' : sentToChefProjet ? 'Déjà envoyé au chef de projet' : 'Envoyer au chef de projet'}
+        </Button>
+
+        {sentToChefProjet && !loading && (
+          <p className="text-sm text-green-600">
+            ✓ Rapport déjà envoyé au chef de projet
+          </p>
+        )}
+      </div>
     </div>
   );
 }
+

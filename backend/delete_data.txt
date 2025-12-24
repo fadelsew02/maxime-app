@@ -1,0 +1,8 @@
+from core.models import Client, Echantillon, Essai, WorkflowValidation, Rapport, RapportMarketing
+WorkflowValidation.objects.all().delete()
+RapportMarketing.objects.all().delete()
+Rapport.objects.all().delete()
+Essai.objects.all().delete()
+Echantillon.objects.all().delete()
+Client.objects.all().delete()
+print("✅ TOUTES LES DONNÉES ONT ÉTÉ SUPPRIMÉES !")

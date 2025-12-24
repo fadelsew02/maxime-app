@@ -56,78 +56,56 @@ export function ChefServiceModule() {
       } catch (e) {}
 
       const essais: EssaiResult[] = [];
-      for (let j = 0; j < localStorage.length; j++) {
-        const essaiKey = localStorage.key(j);
-        if (essaiKey && essaiKey.startsWith(code + '_') && !essaiKey.includes('sent_to_chef') && !essaiKey.includes('treatment_')) {
-          const essaiData = localStorage.getItem(essaiKey);
-          if (essaiData) {
+      try {
+        const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon_code=${code}&statut_validation=accepted`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const essaisData = await essaisResponse.json();
+        
+        for (const essai of essaisData.results || []) {
+          const dureesStandard: Record<string, number> = {
+            AG: 5,
+            Proctor: 5,
+            CBR: 9,
+            Oedometre: 18,
+            Cisaillement: 4
+          };
+          
+          let dateDebut = essai.date_debut || essai.date_reception || '-';
+          let dateFin = essai.date_fin || essai.date_validation || '-';
+          
+          if (dateDebut === '-' && dateFin === '-' && workflow.date_validation_chef_projet) {
             try {
-              const essai = JSON.parse(essaiData);
-              if (essai.validationStatus === 'accepted' && essai.envoye) {
-                const parts = essaiKey.split('_');
-                const essaiType = parts[parts.length - 1];
-                
-                let dateDebut = essai.dateDebut || essai.date_debut || essai.dateReception || essai.date_reception || '-';
-                let dateFin = essai.dateFin || essai.date_fin || essai.dateValidation || essai.date_validation || '-';
-                
-                const dureesStandard: Record<string, number> = {
-                  AG: 5,
-                  Proctor: 5,
-                  CBR: 9,
-                  Oedometre: 18,
-                  Cisaillement: 4
-                };
-                
-                if (dateDebut === '-' && dateFin === '-' && workflow.date_validation_chef_projet) {
-                  try {
-                    const dateEnvoi = new Date(workflow.date_validation_chef_projet);
-                    const duree = dureesStandard[essaiType] || 5;
-                    dateFin = dateEnvoi.toISOString().split('T')[0];
-                    const debut = new Date(dateEnvoi);
-                    debut.setDate(debut.getDate() - duree);
-                    dateDebut = debut.toISOString().split('T')[0];
-                  } catch (e) {}
-                }
-                else if (dateDebut === '-' && dateFin !== '-') {
-                  try {
-                    const fin = new Date(dateFin);
-                    const duree = dureesStandard[essaiType] || 5;
-                    const debut = new Date(fin);
-                    debut.setDate(debut.getDate() - duree);
-                    dateDebut = debut.toISOString().split('T')[0];
-                  } catch (e) {}
-                }
-                else if (dateFin === '-' && dateDebut !== '-') {
-                  try {
-                    const debut = new Date(dateDebut);
-                    const duree = dureesStandard[essaiType] || 5;
-                    const fin = new Date(debut);
-                    fin.setDate(fin.getDate() + duree);
-                    dateFin = fin.toISOString().split('T')[0];
-                  } catch (e) {}
-                }
-                
-                let dureeJours = undefined;
-                if (dateDebut !== '-' && dateFin !== '-') {
-                  try {
-                    const debut = new Date(dateDebut);
-                    const fin = new Date(dateFin);
-                    dureeJours = Math.ceil((fin.getTime() - debut.getTime()) / (1000 * 60 * 60 * 24));
-                  } catch (e) {}
-                }
-                
-                essais.push({
-                  essaiType,
-                  resultats: essai.resultats || {},
-                  dateDebut,
-                  dateFin,
-                  dureeJours
-                });
-              }
+              const dateEnvoi = new Date(workflow.date_validation_chef_projet);
+              const duree = dureesStandard[essai.type] || 5;
+              dateFin = dateEnvoi.toISOString().split('T')[0];
+              const debut = new Date(dateEnvoi);
+              debut.setDate(debut.getDate() - duree);
+              dateDebut = debut.toISOString().split('T')[0];
             } catch (e) {}
           }
+          
+          let dureeJours = undefined;
+          if (dateDebut !== '-' && dateFin !== '-') {
+            try {
+              const debut = new Date(dateDebut);
+              const fin = new Date(dateFin);
+              dureeJours = Math.ceil((fin.getTime() - debut.getTime()) / (1000 * 60 * 60 * 24));
+            } catch (e) {}
+          }
+          
+          essais.push({
+            essaiType: essai.type,
+            resultats: essai.resultats || {},
+            dateDebut,
+            dateFin,
+            dureeJours
+          });
         }
-      }
+      } catch (e) {}
 
       rapports.push({
         code,
@@ -183,10 +161,9 @@ export function ChefServiceModule() {
               </div>
             ) : (
               echantillons.map((ech) => {
-                // Vérifier si le rapport a été envoyé au DT
-                const sendKeyDT = `sent_to_directeur_technique_${ech.code}`;
-                const sentToDT = localStorage.getItem(sendKeyDT);
-                const isEnvoyeDT = sentToDT ? JSON.parse(sentToDT).sentByChefService === true : false;
+                // Vérifier si le rapport a été envoyé au DT via l'API
+                const workflow = await workflowApi.getByCode(ech.code);
+                const isEnvoyeDT = workflow?.etape_actuelle === 'directeur_technique';
                 
                 return (
                   <div
@@ -374,24 +351,19 @@ export function ChefServiceModule() {
 
 function ValidationSection({ echantillon, onClose }: { echantillon: EchantillonRapport; onClose: () => void }) {
   const [comment, setComment] = useState('');
-  const [validated, setValidated] = useState(() => {
-    const sendKey = `sent_to_chef_service_${echantillon.code}`;
-    const sentData = localStorage.getItem(sendKey);
-    if (sentData) {
-      const data = JSON.parse(sentData);
-      return data.acceptedByChefService === true || data.rejectedByChefService === true;
-    }
-    return false;
-  });
-  const [isAccepted, setIsAccepted] = useState(() => {
-    const sendKey = `sent_to_chef_service_${echantillon.code}`;
-    const sentData = localStorage.getItem(sendKey);
-    if (sentData) {
-      const data = JSON.parse(sentData);
-      return data.acceptedByChefService === true;
-    }
-    return false;
-  });
+  const [validated, setValidated] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(false);
+
+  useEffect(() => {
+    const checkValidationStatus = async () => {
+      const workflow = await workflowApi.getByCode(echantillon.code);
+      if (workflow) {
+        setValidated(workflow.etape_actuelle !== 'chef_service');
+        setIsAccepted(workflow.etape_actuelle === 'directeur_technique');
+      }
+    };
+    checkValidationStatus();
+  }, [echantillon.code]);
 
   const handleAccept = async () => {
     const workflow = await workflowApi.getByCode(echantillon.code);

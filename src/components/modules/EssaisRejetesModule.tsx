@@ -277,71 +277,73 @@ function EssaiRejeteForm({ essai, onClose }: { essai: any; onClose: () => void }
     }
   }, [formData.dateDebut, essai.dureeEstimee, essai.statut]);
 
-  const handleDemarrer = () => {
+  const handleDemarrer = async () => {
     if (!formData.dateDebut) {
       toast.error('Veuillez saisir la date de début');
       return;
     }
 
-    const dateDebutFormatted = format(formData.dateDebut, 'yyyy-MM-dd');
-    const dateFinFormatted = formData.dateFin ? format(formData.dateFin, 'yyyy-MM-dd') : format(calculateDateFin(formData.dateDebut, essai.dureeEstimee), 'yyyy-MM-dd');
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/essais/${essai.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          statut: 'en_cours',
+          date_debut: format(formData.dateDebut, 'yyyy-MM-dd'),
+          date_fin: format(formData.dateFin, 'yyyy-MM-dd'),
+          operateur: formData.operateur,
+          resultats: getResultats(),
+          commentaires: formData.commentaires,
+          date_rejet: null
+        })
+      });
 
-    // Mettre à jour dans localStorage
-    const updatedData = {
-      ...JSON.parse(localStorage.getItem(essai.id) || '{}'),
-      statut: 'en_cours',
-      dateDebut: dateDebutFormatted,
-      dateFin: dateFinFormatted,
-      operateur: formData.operateur,
-      resultats: getResultats(),
-      commentaires: formData.commentaires,
-      validationStatus: null,
-      envoye: true
-    };
-    localStorage.setItem(essai.id, JSON.stringify(updatedData));
-    
-    toast.success('Essai corrigé et renvoyé à la décodification');
-    onClose();
+      if (response.ok) {
+        toast.success('Essai corrigé et renvoyé à la décodification');
+        onClose();
+      } else {
+        toast.error('Erreur lors de la correction');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
   };
 
-  const handleTerminer = () => {
+  const handleTerminer = async () => {
     if (!formData.dateFin) {
       toast.error('Veuillez saisir la date de fin');
       return;
     }
 
-    updateEssai(essai.id, {
-      statut: 'termine',
-      dateFin: format(formData.dateFin, 'yyyy-MM-dd'),
-      resultats: getResultats(),
-      commentaires: formData.commentaires,
-      statutValidation: undefined, // Reset validation status
-      commentairesValidation: undefined, // Clear rejection comments
-    });
-
-    // Vérifier si tous les essais de l'échantillon sont maintenant terminés et validés
-    const essaisEchantillon = getEssaisByEchantillon(essai.echantillonCode);
-    const tousFinisEtValides = essaisEchantillon.every(e => e.statut === 'termine' && e.statutValidation !== 'rejected');
-
-    if (tousFinisEtValides) {
-      // Changer le statut de l'échantillon à 'decodification' pour re-validation
-      updateEchantillon(essai.echantillonCode, { statut: 'decodification' });
-      toast.success(`Correction terminée - Échantillon ${essai.echantillonCode} renvoyé à la décodification pour nouvelle validation`);
-      
-      // Ajouter une notification pour l'équipe de décodification
-      addNotification({
-        type: 'info',
-        title: 'Essai corrigé disponible',
-        message: `L'essai ${essai.type} de l'échantillon ${essai.echantillonCode} a été corrigé et est prêt pour re-validation`,
-        userRole: 'responsable_traitement',
-        module: 'Essais Rejetés',
-        actionRequired: true,
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/essais/${essai.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          statut: 'termine',
+          date_fin: format(formData.dateFin, 'yyyy-MM-dd'),
+          resultats: getResultats(),
+          commentaires: formData.commentaires,
+          statut_validation: null,
+          commentaires_validation: null
+        })
       });
-    } else {
-      toast.success('Correction de l\'essai terminée');
-    }
 
-    onClose();
+      if (response.ok) {
+        toast.success('Correction terminée - Échantillon renvoyé à la décodification');
+        onClose();
+      } else {
+        toast.error('Erreur lors de la correction');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
   };
 
   const getResultats = () => {

@@ -51,11 +51,11 @@ class Client(models.Model):
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=20, unique=True, editable=False)
-    nom = models.CharField(max_length=200)
-    contact = models.CharField(max_length=200)
-    projet = models.CharField(max_length=300)
-    email = models.EmailField(blank=True)
-    telephone = models.CharField(max_length=20, blank=True)
+    nom = models.CharField(max_length=200, help_text="Nom de l'entreprise")
+    projet = models.CharField(max_length=300, help_text="Nom du projet")
+    contact = models.CharField(max_length=200, help_text="Personne ayant apporté les échantillons")
+    telephone = models.CharField(max_length=20, help_text="Téléphone")
+    email = models.EmailField(help_text="Adresse e-mail de l'entreprise ou de la personne")
     photo = models.ImageField(upload_to='clients/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -143,6 +143,9 @@ class Echantillon(models.Model):
             models.Index(fields=['date_reception']),
         ]
     
+    # Champ pour le numéro de sondage (obligatoire si caroté)
+    numero_sondage = models.CharField(max_length=50, blank=True, help_text="Numéro de sondage (obligatoire si caroté)")
+    
     # Champs pour les dates d'envoi par type d'essai
     date_envoi_ag = models.DateField(blank=True, null=True)
     date_envoi_proctor = models.DateField(blank=True, null=True)
@@ -159,6 +162,8 @@ class Echantillon(models.Model):
     # Champs pour le tableau réceptionniste
     date_envoi_traitement = models.DateField(blank=True, null=True, help_text="Date d'envoi au traitement")
     date_envoi_chef_projet = models.DateField(blank=True, null=True, help_text="Date d'envoi au chef de projet")
+    date_envoi_chef_service = models.DateField(blank=True, null=True, help_text="Date d'envoi au chef de service")
+    date_envoi_directeur_technique = models.DateField(blank=True, null=True, help_text="Date d'envoi au directeur technique")
     
     # Informations client dénormalisées pour performance
     client_nom = models.CharField(max_length=200, blank=True)
@@ -253,6 +258,7 @@ class Essai(models.Model):
     # Statut
     statut = models.CharField(max_length=15, choices=STATUT_CHOICES, default='attente')
     statut_validation = models.CharField(max_length=15, choices=STATUT_VALIDATION_CHOICES, default='pending')
+    priorite = models.CharField(max_length=10, choices=[('normale', 'Normale'), ('urgente', 'Urgente')], default='normale')
     
     # Résultats (stockés en JSON)
     resultats = models.JSONField(blank=True, null=True)

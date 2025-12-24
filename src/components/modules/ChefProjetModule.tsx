@@ -52,12 +52,12 @@ export function ChefProjetModule() {
     setLoading(true);
     const clientsMap = new Map<string, ClientGroupe>();
 
-    const workflows = await workflowApi.getByEtape('chef_projet');
-    console.log('Tous les workflows chef_projet:', workflows.length, workflows.map(w => w.code_echantillon));
-    const workflowsActifs = workflows.filter(w => !w.rejet_chef_projet && !w.validation_chef_projet);
-    console.log('Workflows actifs:', workflowsActifs.length, workflowsActifs.map(w => w.code_echantillon));
+    const workflows = await workflowApi.getByEtape('chef_service');
+    console.log('Tous les workflows chef_service (archivés):', workflows.length, workflows.map(w => w.code_echantillon));
+    const workflowsArchives = workflows.filter(w => w.validation_chef_projet);
+    console.log('Workflows archivés:', workflowsArchives.length, workflowsArchives.map(w => w.code_echantillon));
     
-    for (const workflow of workflowsActifs) {
+    for (const workflow of workflowsArchives) {
       const code = workflow.code_echantillon;
       let clientName = workflow.client_name || '-';
       
@@ -175,9 +175,9 @@ export function ChefProjetModule() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>Clients reçus</CardTitle>
+              <CardTitle>Rapports archivés</CardTitle>
               <CardDescription>
-                {clients.length} client(s) en attente de validation
+                Tous les rapports transmis au chef service sont archivés ici
               </CardDescription>
             </div>
             <Button onClick={loadEchantillons} disabled={loading}>
@@ -346,7 +346,10 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
       )}
 
       <div className="pt-4 border-t">
-        <h3 className="font-semibold mb-4">Échantillons en traitement ({client.echantillons.length})</h3>
+        <h3 className="font-semibold mb-4">Échantillons archivés ({client.echantillons.length})</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Ces rapports ont été transmis au chef de service et sont archivés ici pour consultation.
+        </p>
         <div className="space-y-3">
           {client.echantillons.map((ech) => {
             console.log(`Échantillon ${ech.code}: ${ech.essais.length} essais`, ech.essais.map(e => e.essaiType));
@@ -358,6 +361,9 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
                     <span className="font-semibold">{ech.code}</span>
                     <Badge variant="outline" style={{ borderColor: '#28A745', color: '#28A745' }}>
                       {ech.essais.length} essai(s)
+                    </Badge>
+                    <Badge style={{ backgroundColor: '#6C757D', color: '#FFFFFF' }}>
+                      ARCHIVÉ
                     </Badge>
                   </div>
                   <div className="flex gap-2 flex-wrap">
@@ -380,15 +386,13 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
                   </div>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => setSelectedEchantillon(ech)}>
-                  Ouvrir
+                  Consulter
                 </Button>
               </div>
             </div>
           )})}
         </div>
       </div>
-
-      <ClientValidation client={client} onClose={onClose} />
     </div>
   );
 }

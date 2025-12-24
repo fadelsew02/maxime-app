@@ -218,28 +218,39 @@ function EssaiRejeteForm({ essai, onClose }: { essai: any; onClose: () => void }
   
   const [newFileSelected, setNewFileSelected] = useState(false);
 
-  const handleDemarrer = () => {
+  const handleDemarrer = async () => {
     if (!formData.operateur || !formData.dateDebut) {
       toast.error('Veuillez saisir l\'opérateur et la date de début');
       return;
     }
 
-    // Mettre à jour dans localStorage
-    const updatedData = {
-      ...JSON.parse(localStorage.getItem(essai.id) || '{}'),
-      statut: 'en_cours',
-      dateDebut: format(formData.dateDebut, 'yyyy-MM-dd'),
-      dateFin: format(formData.dateFin, 'yyyy-MM-dd'),
-      operateur: formData.operateur,
-      resultats: getResultats(),
-      commentaires: formData.commentaires,
-      validationStatus: null,
-      envoye: true
-    };
-    localStorage.setItem(essai.id, JSON.stringify(updatedData));
-    
-    toast.success('Essai corrigé et renvoyé à la décodification');
-    onClose();
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/essais/${essai.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          statut: 'en_cours',
+          date_debut: format(formData.dateDebut, 'yyyy-MM-dd'),
+          date_fin: format(formData.dateFin, 'yyyy-MM-dd'),
+          operateur: formData.operateur,
+          resultats: getResultats(),
+          commentaires: formData.commentaires,
+          date_rejet: null
+        })
+      });
+
+      if (response.ok) {
+        toast.success('Essai corrigé et renvoyé à la décodification');
+        onClose();
+      } else {
+        toast.error('Erreur lors de la correction');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
   };
 
   const getResultats = () => {

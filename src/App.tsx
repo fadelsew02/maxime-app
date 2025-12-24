@@ -6,7 +6,7 @@ import { EchantillonDetails } from './components/EchantillonDetails';
 import { Toaster } from './components/ui/sonner';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { getCurrentUser, logout as logoutAuth } from './lib/auth';
-import { autoCleanOnStartup } from './utils/cleanLocalStorage';
+import { autoCleanupOnStartup } from './utils/cleanupLocalStorage';
 
 export type UserRole = 
   | 'receptionniste'
@@ -48,7 +48,7 @@ function App() {
     };
 
     checkAuth();
-    autoCleanOnStartup();
+    autoCleanupOnStartup();
   }, []);
 
   const handleLogin = (userData: User) => {

@@ -478,9 +478,23 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
         </Button>
 
         {sentToChefProjet && !loading && (
-          <p className="text-sm text-green-600">
-            ✓ Rapport déjà envoyé au chef de projet
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-green-600">
+              ✓ Rapport déjà envoyé au chef de projet
+            </p>
+            <div className="p-3 rounded-lg" style={{ backgroundColor: '#E8F5E8', border: '1px solid #28A745' }}>
+              <Label className="text-sm font-semibold" style={{ color: '#28A745' }}>Date d'envoi au chef projet :</Label>
+              <p className="text-sm mt-1" style={{ color: '#28A745' }}>
+                {new Date().toLocaleDateString('fr-FR', {
+                  day: '2-digit',
+                  month: '2-digit', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>

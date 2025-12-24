@@ -11,40 +11,36 @@ export function ChefProjetRejeteModule() {
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<string>('all');
 
-  const loadEssaisRejetes = () => {
+  const loadEssaisRejetes = async () => {
     setLoading(true);
-    const rejetes: any[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('sent_to_chef_')) {
-        const data = localStorage.getItem(key);
-        if (data) {
-          try {
-            const sentData = JSON.parse(data);
-            // Vérifier si rejeté par le chef de projet UNIQUEMENT (pas par le chef de service)
-            if (sentData.rejected === true && !sentData.rejectedByChefService) {
-              const parts = key.replace('sent_to_chef_', '').split('_');
-              const essaiType = parts[parts.length - 1];
-              const echantillonCode = parts.slice(0, -1).join('_');
-              
-              rejetes.push({
-                echantillonCode,
-                essaiType,
-                chefProjet: sentData.chefProjet,
-                dateSent: sentData.date,
-                dateRejected: sentData.dateRejected,
-                rejectionReason: sentData.rejectionReason || '-',
-                file: sentData.file
-              });
-            }
-          } catch (e) {}
-        }
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/workflows/?etape_actuelle=chef_projet&statut=rejected', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const rejetes = data.results.map((workflow: any) => ({
+          echantillonCode: workflow.code_echantillon,
+          essaiType: workflow.type_essai || 'Rapport',
+          chefProjet: workflow.chef_projet || '-',
+          dateSent: workflow.date_envoi_chef_projet,
+          dateRejected: workflow.date_rejet_chef_projet,
+          rejectionReason: workflow.commentaires_rejet || '-',
+          file: workflow.file_name || '-'
+        }));
+        setEssaisRejetes(rejetes);
+        setFilteredRejetes(rejetes);
+      } else {
+        toast.error('Erreur lors du chargement');
       }
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error('Erreur de connexion');
     }
-
-    setEssaisRejetes(rejetes);
-    setFilteredRejetes(rejetes);
     setLoading(false);
   };
 

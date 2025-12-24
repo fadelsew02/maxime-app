@@ -88,8 +88,6 @@ export function AppSidebar({ user, activeView, onNavigate, onLogout }: AppSideba
       return [
         { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
         { id: 'chef-projet' as ActiveView, label: 'Rapports traitement', icon: FileText },
-        { id: 'chef-projet-rejete' as ActiveView, label: 'Rapports rejetés', icon: FileText },
-        { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
       ];
     }
 
@@ -107,7 +105,6 @@ export function AppSidebar({ user, activeView, onNavigate, onLogout }: AppSideba
       return [
         { id: 'home' as ActiveView, label: 'Accueil', icon: Home },
         { id: 'validation' as ActiveView, label: 'Validation', icon: CheckCircle },
-        { id: 'rapports-valides' as ActiveView, label: 'Rapport', icon: FileText },
       ];
     }
 

@@ -6,8 +6,12 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Clock, CheckCircle, AlertCircle, TrendingUp, Search, QrCode, Users, FileText, Printer, Calendar, Filter, RefreshCw } from 'lucide-react';
 import QRCode from 'react-qr-code';
+import { Calendar } from './ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { Clock, CheckCircle, AlertCircle, TrendingUp, Search, QrCode, Users, FileText, Printer, CalendarIcon, Filter, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import * as React from 'react';
 import { getClients, getEchantillons, getEchantillon, getEchantillonsByClient, getClient, getEssais, Client, Echantillon } from '../lib/mockData';
@@ -1747,100 +1751,111 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
   const [searchType, setSearchType] = useState<'client' | 'echantillon'>('client');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<any>(null);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [echantillonsAPI, setEchantillonsAPI] = useState<any[]>([]);
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [dateDebut, setDateDebut] = useState<Date | undefined>();
+  const [dateFin, setDateFin] = useState<Date | undefined>();
+  const [natureFilter, setNatureFilter] = useState<string>('all');
 
-  // Charger les clients et échantillons depuis l'API et localStorage
+  // Filtrer les clients selon les critères
+  const filteredClients = clients.filter(client => {
+    const echantillonsClient = echantillonsAPI.filter((ech: any) => ech.client_code === client.code);
+    
+    if (echantillonsClient.length === 0) return false;
+    
+    // Filtre par période
+    if (dateFilter !== 'all' || dateDebut || dateFin) {
+      const now = new Date();
+      let dateMin: Date | undefined;
+      let dateMax: Date | undefined;
+      
+      if (dateFilter === 'week') {
+        dateMin = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (dateFilter === 'month') {
+        dateMin = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (dateFilter === 'year') {
+        dateMin = new Date(now.getFullYear(), 0, 1);
+      } else if (dateDebut) {
+        dateMin = dateDebut;
+      }
+      
+      if (dateFin) {
+        dateMax = dateFin;
+      }
+      
+      const hasEchantillonInPeriod = echantillonsClient.some((ech: any) => {
+        const dateReception = new Date(ech.date_reception);
+        if (dateMin && dateReception < dateMin) return false;
+        if (dateMax && dateReception > dateMax) return false;
+        return true;
+      });
+      
+      if (!hasEchantillonInPeriod) return false;
+    }
+    
+    // Filtre par nature
+    if (natureFilter !== 'all') {
+      const hasNature = echantillonsClient.some((ech: any) => ech.nature === natureFilter);
+      if (!hasNature) return false;
+    }
+    
+    return true;
+  });
+
+  // Charger les clients et échantillons depuis l'API uniquement
   React.useEffect(() => {
     const loadData = async () => {
       try {
-        // Charger depuis localStorage
-        const savedClients = localStorage.getItem('clients');
-        let localClients: Client[] = [];
-        if (savedClients && savedClients !== 'null') {
-          const parsedClients = JSON.parse(savedClients);
-          if (Array.isArray(parsedClients)) {
-            localClients = parsedClients;
+        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json();
+        
+        // Stocker tous les échantillons de l'API
+        setEchantillonsAPI(data.results || []);
+        
+        // Extraire les clients uniques depuis les échantillons
+        const clientsFromAPI: Client[] = [];
+        const clientCodes = new Set();
+        
+        data.results.forEach((ech: any) => {
+          if (ech.client_code && ech.client_nom && !clientCodes.has(ech.client_code)) {
+            clientCodes.add(ech.client_code);
+            clientsFromAPI.push({
+              id: ech.client_code,
+              code: ech.client_code,
+              nom: ech.client_nom,
+              contact: ech.client_contact || '-',
+              projet: ech.client_projet || '-',
+              email: ech.client_email || '-',
+              telephone: ech.client_telephone || '-',
+              dateCreation: new Date().toISOString().split('T')[0]
+            });
           }
-        }
-
-        // Charger depuis l'API
-        try {
-          const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          const data = await response.json();
-          
-          // Stocker tous les échantillons de l'API
-          setEchantillonsAPI(data.results || []);
-          
-          // Extraire les clients uniques depuis les échantillons
-          const clientsFromAPI: Client[] = [];
-          const clientCodes = new Set();
-          
-          data.results.forEach((ech: any) => {
-            if (ech.client_code && ech.client_nom && !clientCodes.has(ech.client_code)) {
-              clientCodes.add(ech.client_code);
-              clientsFromAPI.push({
-                id: ech.client_code,
-                code: ech.client_code,
-                nom: ech.client_nom,
-                contact: ech.client_contact || '-',
-                projet: ech.client_projet || '-',
-                email: ech.client_email || '-',
-                telephone: ech.client_telephone || '-',
-                dateCreation: new Date().toISOString().split('T')[0]
-              });
-            }
-          });
-          
-          // Fusionner les clients (API + localStorage)
-          const allClients = [...localClients];
-          clientsFromAPI.forEach(apiClient => {
-            if (!allClients.find(c => c.code === apiClient.code)) {
-              allClients.push(apiClient);
-            }
-          });
-          
-          setClients(allClients);
-        } catch (apiError) {
-          console.log('API non disponible, utilisation localStorage uniquement');
-          setClients(localClients);
-          setEchantillonsAPI([]);
-        }
+        });
+        
+        setClients(clientsFromAPI);
       } catch (e) {
         console.error('Erreur chargement données:', e);
+        toast.error('Erreur de connexion au serveur');
       }
     };
     
-    // Vider TOUT localStorage sauf les tokens d'auth au premier chargement
-    // COMMENTÉ pour permettre l'enregistrement des clients et échantillons
-    // if (!sessionStorage.getItem('app_initialized')) {
-    //   const accessToken = localStorage.getItem('access_token');
-    //   const refreshToken = localStorage.getItem('refresh_token');
-    //   localStorage.clear();
-    //   if (accessToken) localStorage.setItem('access_token', accessToken);
-    //   if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
-    //   sessionStorage.setItem('app_initialized', 'true');
-    // }
-    
     loadData();
-    // Auto-refresh désactivé pour éviter le changement constant des dates
-    // const interval = setInterval(loadData, 5000);
-    // return () => clearInterval(interval);
   }, []);
 
   const handleSearch = () => {
     if (!searchQuery) return;
 
+  const handleSearch = async () => {
+    if (!searchQuery) return;
+
     if (searchType === 'client') {
-      // Chercher dans les échantillons API et localStorage
-      const echantillonsLocal = getEchantillonsByClient(searchQuery);
+      // Chercher dans les échantillons API uniquement
       const echantillonsFromAPI = echantillonsAPI.filter((ech: any) => ech.client_code === searchQuery);
-      const allEchantillons = [...echantillonsLocal, ...echantillonsFromAPI.map((ech: any) => ({
+      const allEchantillons = echantillonsFromAPI.map((ech: any) => ({
         id: ech.id,
         code: ech.code,
         clientCode: ech.client_code,
@@ -1854,38 +1869,41 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
         dateReception: ech.date_reception || '',
         dateFinEstimee: '',
         statut: ech.statut || 'stockage',
-        chefProjet: ech.chef_projet || ''
-      }))];
+        chefProjet: ech.chef_projet || '',
+        photo: ech.photo || '',
+        numeroSondage: ech.numero_sondage || ''
+      }));
       
       const client = clients.find(c => c.code === searchQuery);
       setResults({ type: 'client', data: allEchantillons, client });
     } else {
-      // Chercher échantillon dans localStorage et API
-      let echantillon = getEchantillon(searchQuery);
-      if (!echantillon) {
-        const echAPI = echantillonsAPI.find((ech: any) => ech.code === searchQuery);
-        if (echAPI) {
-          echantillon = {
-            id: echAPI.id,
-            code: echAPI.code,
-            clientCode: echAPI.client_code,
-            nature: echAPI.nature || '',
-            profondeurDebut: echAPI.profondeur_debut || 0,
-            profondeurFin: echAPI.profondeur_fin || 0,
-            sondage: echAPI.sondage || 'vrac',
-            nappe: echAPI.nappe || '',
-            essais: echAPI.essais_types || [],
-            qrCode: echAPI.code,
-            dateReception: echAPI.date_reception || '',
-            dateFinEstimee: '',
-            statut: echAPI.statut || 'stockage',
-            chefProjet: echAPI.chef_projet || ''
-          };
-        }
+      // Chercher échantillon dans l'API uniquement
+      const echAPI = echantillonsAPI.find((ech: any) => ech.code === searchQuery);
+      let echantillon = null;
+      if (echAPI) {
+        echantillon = {
+          id: echAPI.id,
+          code: echAPI.code,
+          clientCode: echAPI.client_code,
+          nature: echAPI.nature || '',
+          profondeurDebut: echAPI.profondeur_debut || 0,
+          profondeurFin: echAPI.profondeur_fin || 0,
+          sondage: echAPI.sondage || 'vrac',
+          nappe: echAPI.nappe || '',
+          essais: echAPI.essais_types || [],
+          qrCode: echAPI.code,
+          dateReception: echAPI.date_reception || '',
+          dateFinEstimee: '',
+          statut: echAPI.statut || 'stockage',
+          chefProjet: echAPI.chef_projet || '',
+          photo: echAPI.photo || '',
+          numeroSondage: echAPI.numero_sondage || ''
+        };
       }
       const client = echantillon ? clients.find(c => c.code === echantillon.clientCode) : null;
       setResults({ type: 'echantillon', data: echantillon, client });
     }
+  };
   };
 
   // Composant pour afficher la prédiction de date d'envoi et retour
@@ -2059,7 +2077,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Liste des clients */}
+        {/* Liste des clients avec filtres */}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -2069,18 +2087,85 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
               </div>
             </CardTitle>
             <CardDescription>
-              {clients.length} client(s) au total
+              {filteredClients.length} client(s) sur {clients.length} au total
             </CardDescription>
+            
+            {/* Filtres */}
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Période</Label>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes les périodes</SelectItem>
+                      <SelectItem value="week">Cette semaine</SelectItem>
+                      <SelectItem value="month">Ce mois</SelectItem>
+                      <SelectItem value="year">Cette année</SelectItem>
+                      <SelectItem value="custom">Période personnalisée</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {dateFilter === 'custom' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Date début</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateDebut ? format(dateDebut, 'PPP', { locale: fr }) : 'Sélectionner'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar mode="single" selected={dateDebut} onSelect={setDateDebut} initialFocus />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date fin</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start text-left">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateFin ? format(dateFin, 'PPP', { locale: fr }) : 'Sélectionner'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar mode="single" selected={dateFin} onSelect={setDateFin} initialFocus />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </>
+                )}
+                
+                <div className="space-y-2">
+                  <Label>Nature d'échantillon</Label>
+                  <Select value={natureFilter} onValueChange={setNatureFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes les natures</SelectItem>
+                      <SelectItem value="Sol">Sol</SelectItem>
+                      <SelectItem value="Gravier">Gravier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-[500px] overflow-y-auto">
-              {clients.map((client) => {
-                const echantillonsLocal = getEchantillonsByClient(client.code);
+              {filteredClients.map((client) => {
                 const echantillonsFromAPI = echantillonsAPI.filter((ech: any) => ech.client_code === client.code);
-                const totalEchantillons = echantillonsLocal.length + echantillonsFromAPI.length;
+                const totalEchantillons = echantillonsFromAPI.length;
                 
                 // Calculer la date de retour la plus tardive pour ce client
-                const allEchantillons = [...echantillonsLocal, ...echantillonsFromAPI.map((ech: any) => ({
+                const allEchantillons = echantillonsFromAPI.map((ech: any) => ({
                   id: ech.id,
                   code: ech.code,
                   clientCode: ech.client_code,
@@ -2095,7 +2180,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                   dateFinEstimee: '',
                   statut: ech.statut || 'stockage',
                   chefProjet: ech.chef_projet || ''
-                }))];
+                }));
                 
                 let dateRetourPlusTardive = '';
                 if (allEchantillons.length > 0) {
@@ -2356,29 +2441,40 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <Label>Code</Label>
-                          <p>{results.data.code}</p>
-                        </div>
-                        <div>
-                          <Label>QR Code</Label>
-                          <p>{results.data.qrCode}</p>
+                          <p className="font-medium">{results.data.code}</p>
                         </div>
                         <div>
                           <Label>Nature</Label>
-                          <p>{results.data.nature}</p>
+                          <p className="font-medium">{results.data.nature}</p>
                         </div>
                         <div>
                           <Label>Profondeurs</Label>
-                          <p>{results.data.profondeurDebut}m - {results.data.profondeurFin}m</p>
+                          <p className="font-medium">{results.data.profondeurDebut}m - {results.data.profondeurFin}m</p>
+                        </div>
+                        <div>
+                          <Label>Type de sondage</Label>
+                          <p className="font-medium">{results.data.sondage === 'carotte' ? 'Caroté' : 'Vrac'}</p>
+                        </div>
+                        {results.data.numeroSondage && (
+                          <div>
+                            <Label>Numéro de sondage</Label>
+                            <p className="font-medium">{results.data.numeroSondage}</p>
+                          </div>
+                        )}
+                        <div>
+                          <Label>Nappe phréatique</Label>
+                          <p className="font-medium">{results.data.nappe ? `${results.data.nappe} m` : 'Non renseignée'}</p>
                         </div>
                         <div>
                           <Label>Date réception</Label>
-                          <p>{results.data.dateReception}</p>
+                          <p className="font-medium">{results.data.dateReception}</p>
                         </div>
                         <div>
                           <Label>Chef de projet</Label>
-                          <p>{results.data.chefProjet || '-'}</p>
+                          <p className="font-medium">{results.data.chefProjet || '-'}</p>
                         </div>
                       </div>
+                      
                       {results.data.photo && (
                         <div className="mt-4">
                           <Label>Photo de l'échantillon</Label>
@@ -2389,9 +2485,15 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                               className="max-w-full h-auto rounded-lg border"
                               style={{ maxHeight: '200px' }}
                             />
+                            <p className="text-xs mt-2 text-blue-600">
+                              <a href={results.data.photo} target="_blank" rel="noopener noreferrer">
+                                Ouvrir la photo en plein écran
+                              </a>
+                            </p>
                           </div>
                         </div>
                       )}
+                      
                       <div>
                         <Label>Essais demandés</Label>
                         <div className="flex flex-wrap gap-2 mt-2">

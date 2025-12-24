@@ -61,61 +61,118 @@ let echantillons: Echantillon[] = [];
 
 let essais: EssaiTest[] = [];
 
-// Fonctions d'accès et manipulation
-export const getClients = () => {
-  // Charger les clients depuis localStorage
+// Service de données - utilise uniquement le backend
+export const getClients = async (): Promise<Client[]> => {
   try {
-    const savedClients = localStorage.getItem('clients');
-    if (savedClients && savedClients !== 'null') {
-      const parsedClients = JSON.parse(savedClients);
-      if (Array.isArray(parsedClients)) {
-        clients = parsedClients;
-      }
-    }
+    const response = await fetch('http://127.0.0.1:8000/api/clients/', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return data.results || [];
   } catch (e) {
     console.error('Erreur lors du chargement des clients:', e);
+    return [];
   }
-  return clients;
 };
 
-export const getClient = (code: string) => getClients().find(c => c.code === code);
-
-export const addClient = (client: Client) => {
-  clients.push(client);
-  localStorage.setItem('clients', JSON.stringify(clients));
-  return client;
+export const getClient = async (code: string): Promise<Client | undefined> => {
+  const clients = await getClients();
+  return clients.find(c => c.code === code);
 };
 
-export const getEchantillons = () => {
-  // Charger les échantillons depuis localStorage
+export const addClient = async (client: Client): Promise<Client | null> => {
   try {
-    const savedEchantillons = localStorage.getItem('echantillons');
-    if (savedEchantillons && savedEchantillons !== 'null') {
-      const parsedEchantillons = JSON.parse(savedEchantillons);
-      if (Array.isArray(parsedEchantillons)) {
-        echantillons = parsedEchantillons;
-      }
-    }
+    const response = await fetch('http://127.0.0.1:8000/api/clients/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(client)
+    });
+    return response.ok ? await response.json() : null;
+  } catch (e) {
+    console.error('Erreur lors de l\'ajout du client:', e);
+    return null;
+  }
+};
+
+export const getEchantillons = async (): Promise<Echantillon[]> => {
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return data.results?.map((ech: any) => ({
+      id: ech.id,
+      code: ech.code,
+      clientCode: ech.client_code,
+      nature: ech.nature || '',
+      profondeurDebut: ech.profondeur_debut || '',
+      profondeurFin: ech.profondeur_fin || '',
+      sondage: ech.sondage || 'vrac',
+      nappe: ech.nappe || '',
+      essais: ech.essais_types || [],
+      qrCode: ech.code,
+      dateReception: ech.date_reception || '',
+      dateFinEstimee: '',
+      statut: ech.statut || 'stockage',
+      chefProjet: ech.chef_projet || ''
+    })) || [];
   } catch (e) {
     console.error('Erreur lors du chargement des échantillons:', e);
+    return [];
   }
-  return echantillons;
 };
-export const getEchantillon = (code: string) => echantillons.find(e => e.code === code);
-export const getEchantillonsByClient = (clientCode: string) => 
-  echantillons.filter(e => e.clientCode === clientCode);
-export const addEchantillon = (echantillon: Echantillon) => {
-  echantillons.push(echantillon);
-  localStorage.setItem('echantillons', JSON.stringify(echantillons));
-  return echantillon;
+
+export const getEchantillon = async (code: string): Promise<Echantillon | undefined> => {
+  const echantillons = await getEchantillons();
+  return echantillons.find(e => e.code === code);
 };
-export const updateEchantillon = (code: string, updates: Partial<Echantillon>) => {
-  const index = echantillons.findIndex(e => e.code === code);
-  if (index !== -1) {
-    echantillons[index] = { ...echantillons[index], ...updates };
-    return echantillons[index];
+
+export const getEchantillonsByClient = async (clientCode: string): Promise<Echantillon[]> => {
+  const echantillons = await getEchantillons();
+  return echantillons.filter(e => e.clientCode === clientCode);
+};
+
+export const addEchantillon = async (echantillon: Echantillon): Promise<Echantillon | null> => {
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(echantillon)
+    });
+    return response.ok ? await response.json() : null;
+  } catch (e) {
+    console.error('Erreur lors de l\'ajout de l\'échantillon:', e);
+    return null;
   }
-  return null;
+};
+
+export const updateEchantillon = async (code: string, updates: Partial<Echantillon>): Promise<Echantillon | null> => {
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${code}/`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates)
+    });
+    return response.ok ? await response.json() : null;
+  } catch (e) {
+    console.error('Erreur lors de la mise à jour de l\'échantillon:', e);
+    return null;
+  }
 };
 
 export const getEssais = () => essais;

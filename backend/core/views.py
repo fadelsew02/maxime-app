@@ -201,35 +201,26 @@ class EchantillonViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_meca(self, request):
-        """Dashboard pour les essais mécaniques"""
+        """Dashboard pour les essais mécaniques avec ordre strict d'envoi"""
         echantillons = self.get_queryset().filter(
             essais_types__overlap=['Oedometre', 'Cisaillement']
-        )
+        ).order_by('date_envoi_essais', 'created_at')  # Ordre strict d'envoi
         
         data = []
-        compteur_oedometre = 0
-        compteur_cisaillement = 0
-        
         for ech in echantillons:
             ech_data = EchantillonListSerializer(ech).data
             
-            if 'Oedometre' in (ech.essais_types or []):
-                jours_decalage = int(compteur_oedometre / 10)
-                from datetime import datetime, timedelta
-                date_base = datetime(2025, 12, 8).date()
-                date_envoi = date_base + timedelta(days=jours_decalage)
-                ech_data['date_envoi_oedometre'] = date_envoi.strftime('%d/%m/%Y')
-                compteur_oedometre += 1
+            # Vérifier la priorité (essais rejetés)
+            essais_prioritaires = ech.essais.filter(
+                type__in=['Oedometre', 'Cisaillement'],
+                priorite='urgente'
+            ).exists()
             
-            if 'Cisaillement' in (ech.essais_types or []):
-                jours_decalage = int(compteur_cisaillement / 4)
-                from datetime import datetime, timedelta
-                date_base = datetime(2025, 12, 9).date()
-                date_envoi = date_base + timedelta(days=jours_decalage)
-                ech_data['date_envoi_cisaillement'] = date_envoi.strftime('%d/%m/%Y')
-                compteur_cisaillement += 1
-            
+            ech_data['prioritaire'] = essais_prioritaires
             data.append(ech_data)
+        
+        # Trier : prioritaires d'abord, puis ordre d'envoi
+        data.sort(key=lambda x: (not x.get('prioritaire', False), x.get('date_envoi_essais', '')))
         
         return Response(data)
     
@@ -257,44 +248,26 @@ class EchantillonViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_route(self, request):
-        """Dashboard pour les essais route"""
+        """Dashboard pour les essais route avec ordre strict d'envoi"""
         echantillons = self.get_queryset().filter(
             essais_types__overlap=['AG', 'Proctor', 'CBR']
-        )
+        ).order_by('date_envoi_essais', 'created_at')  # Ordre strict d'envoi
         
         data = []
-        compteur_ag = 0
-        compteur_proctor = 0
-        compteur_cbr = 0
-        
         for ech in echantillons:
             ech_data = EchantillonListSerializer(ech).data
             
-            if 'AG' in (ech.essais_types or []):
-                jours_decalage = int(compteur_ag / 4)
-                from datetime import datetime, timedelta
-                date_base = datetime(2025, 12, 8).date()
-                date_envoi = date_base + timedelta(days=jours_decalage)
-                ech_data['date_envoi_ag'] = date_envoi.strftime('%d/%m/%Y')
-                compteur_ag += 1
+            # Vérifier la priorité (essais rejetés)
+            essais_prioritaires = ech.essais.filter(
+                type__in=['AG', 'Proctor', 'CBR'],
+                priorite='urgente'
+            ).exists()
             
-            if 'Proctor' in (ech.essais_types or []):
-                jours_decalage = int(compteur_proctor / 4)
-                from datetime import datetime, timedelta
-                date_base = datetime(2025, 12, 9).date()
-                date_envoi = date_base + timedelta(days=jours_decalage)
-                ech_data['date_envoi_proctor'] = date_envoi.strftime('%d/%m/%Y')
-                compteur_proctor += 1
-            
-            if 'CBR' in (ech.essais_types or []):
-                jours_decalage = int(compteur_cbr / 4)
-                from datetime import datetime, timedelta
-                date_base = datetime(2025, 12, 10).date()
-                date_envoi = date_base + timedelta(days=jours_decalage)
-                ech_data['date_envoi_cbr'] = date_envoi.strftime('%d/%m/%Y')
-                compteur_cbr += 1
-            
+            ech_data['prioritaire'] = essais_prioritaires
             data.append(ech_data)
+        
+        # Trier : prioritaires d'abord, puis ordre d'envoi
+        data.sort(key=lambda x: (not x.get('prioritaire', False), x.get('date_envoi_essais', '')))
         
         return Response(data)
     
@@ -427,7 +400,7 @@ class EchantillonViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_chef_projet(self, request):
-        """Dashboard pour chef de projet groupé par client"""
+        """Dashboard pour chef de projet avec date traitement = envoi vers chef projet"""
         echantillons = self.get_queryset().select_related('client')
         
         clients_data = {}
@@ -440,10 +413,9 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         result = []
         for client_nom, echs in clients_data.items():
             date_reception = echs[0].date_reception if echs else None
-            date_traitement = '-'
+            date_traitement = echs[0].date_envoi_chef_projet.strftime('%d/%m/%Y') if echs and echs[0].date_envoi_chef_projet else '-'
             date_retour_client = '-'
             
-            # Calculer date de retour avec prédiction
             if echs:
                 prediction = calculer_date_envoi_et_retour(echs[0])
                 date_retour_client = prediction['date_retour']
@@ -460,7 +432,7 @@ class EchantillonViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_directeur_technique(self, request):
-        """Dashboard pour directeur technique avec toutes les dates"""
+        """Dashboard pour directeur technique avec toutes les dates correctes"""
         echantillons = self.get_queryset().select_related('client')
         
         clients_data = {}
@@ -473,12 +445,11 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         result = []
         for client_nom, echs in clients_data.items():
             date_reception = echs[0].date_reception if echs else None
-            date_traitement = '-'
-            date_chef_projet = '-'
-            date_chef_service = '-'
+            date_traitement = echs[0].date_envoi_chef_projet.strftime('%d/%m/%Y') if echs and echs[0].date_envoi_chef_projet else '-'
+            date_chef_projet = echs[0].date_envoi_chef_service.strftime('%d/%m/%Y') if echs and echs[0].date_envoi_chef_service else '-'
+            date_chef_service = echs[0].date_envoi_directeur_technique.strftime('%d/%m/%Y') if echs and echs[0].date_envoi_directeur_technique else '-'
             date_retour_client = '-'
             
-            # Calculer date de retour avec prédiction
             if echs:
                 ech_with_date = next((e for e in echs if e.date_retour_predite), None)
                 if ech_with_date:
@@ -500,7 +471,11 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 
-class EssaiViewSet(viewsets.ModelViewSet):
+from .views_essais_rejetes import EssaiRejetesViewSet
+from .views_workflows_rejetes import WorkflowRejetesViewSet
+
+# Mixin pour les essais rejetés
+class EssaiViewSet(viewsets.ModelViewSet, EssaiRejetesViewSet):
     """ViewSet pour les essais"""
     
     queryset = Essai.objects.select_related('echantillon', 'echantillon__client')
@@ -1160,7 +1135,8 @@ class CapaciteLaboratoireViewSet(viewsets.ModelViewSet):
         })
 
 
-class WorkflowValidationViewSet(viewsets.ModelViewSet):
+# Mixin pour les workflows rejetés
+class WorkflowValidationViewSet(viewsets.ModelViewSet, WorkflowRejetesViewSet):
     """ViewSet pour le workflow de validation"""
     
     queryset = WorkflowValidation.objects.select_related('echantillon', 'created_by')

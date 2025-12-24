@@ -32,7 +32,6 @@ export function ServiceMarketingModule() {
     const rapportsMarketing: RapportMarketing[] = [];
 
     try {
-      // Charger depuis le backend
       const response = await fetch('http://127.0.0.1:8000/api/rapports-marketing/en_attente/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -71,46 +70,12 @@ export function ServiceMarketingModule() {
             clientEmail
           });
         }
+      } else {
+        toast.error('Erreur lors du chargement des rapports');
       }
     } catch (error) {
-      console.error('Erreur chargement backend, utilisation localStorage:', error);
-      // Fallback localStorage
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('sent_to_marketing_')) {
-          const data = localStorage.getItem(key);
-          if (data) {
-            try {
-              const rapportData = JSON.parse(data);
-              if (!rapportData.processedByMarketing) {
-                let clientEmail = '';
-                try {
-                  const response = await fetch('http://127.0.0.1:8000/api/clients/', {
-                    headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                      'Content-Type': 'application/json',
-                    },
-                  });
-                  const clientsData = await response.json();
-                  const client = clientsData.results.find((c: any) => c.nom === rapportData.clientName);
-                  if (client) clientEmail = client.email || '';
-                } catch (error) {}
-                
-                rapportsMarketing.push({
-                  code: rapportData.code,
-                  clientName: rapportData.clientName,
-                  file: rapportData.file,
-                  fileData: rapportData.fileData,
-                  dateEnvoi: rapportData.dateEnvoi,
-                  avisDirecteurSNERTP: rapportData.avisDirecteurSNERTP || '',
-                  signatureDirecteurSNERTP: rapportData.signatureDirecteurSNERTP || '',
-                  clientEmail
-                });
-              }
-            } catch (e) {}
-          }
-        }
-      }
+      console.error('Erreur chargement backend:', error);
+      toast.error('Erreur de connexion au serveur');
     }
 
     setRapports(rapportsMarketing);

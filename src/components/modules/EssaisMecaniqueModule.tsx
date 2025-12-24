@@ -83,6 +83,13 @@ export function EssaisMecaniqueModule() {
         essaisRoute: e.essais_meca_envoyes || []
       }));
       
+      // Trier par date de réception (ordre chronologique - FIFO)
+      echantillonsFormates.sort((a, b) => {
+        const dateA = new Date(a.dateReception).getTime();
+        const dateB = new Date(b.dateReception).getTime();
+        return dateA - dateB;
+      });
+      
       setEchantillons(echantillonsFormates);
     } catch (error) {
       console.error('Erreur chargement échantillons:', error);
@@ -147,7 +154,7 @@ export function EssaisMecaniqueModule() {
       ) : (
         <div className="space-y-6">
           {filteredEchantillons.map((echantillon) => (
-            <EchantillonCard key={`${echantillon.id}-${echantillon.code}`} echantillon={echantillon} onUpdate={loadEchantillons} />
+            <EchantillonCard key={`${echantillon.id}-${echantillon.code}`} echantillon={echantillon} onUpdate={loadEchantillons} echantillons={filteredEchantillons} />
           ))}
 
           {filteredEchantillons.length === 0 && echantillons.length > 0 && (
@@ -167,7 +174,7 @@ export function EssaisMecaniqueModule() {
   );
 }
 
-function EchantillonCard({ echantillon, onUpdate }: { echantillon: EchantillonAvecEssais; onUpdate: () => void }) {
+function EchantillonCard({ echantillon, onUpdate, echantillons }: { echantillon: EchantillonAvecEssais; onUpdate: () => void; echantillons: EchantillonAvecEssais[] }) {
   const [selectedEssai, setSelectedEssai] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [essaisData, setEssaisData] = useState<Record<string, EssaiMecanique>>({});
@@ -211,6 +218,41 @@ function EchantillonCard({ echantillon, onUpdate }: { echantillon: EchantillonAv
   }, [echantillon.id, refreshKey]);
 
   const handleEssaiClick = async (essaiType: string) => {
+    // Vérifier s'il y a des échantillons arrivés avant qui n'ont pas encore démarré
+    const echantillonIndex = echantillons.findIndex(e => e.id === echantillon.id);
+    if (echantillonIndex > 0) {
+      // Il y a des échantillons avant celui-ci
+      const echantillonsAvant = echantillons.slice(0, echantillonIndex);
+      
+      // Vérifier si un des échantillons avant a le même type d'essai non démarré
+      for (const echAvant of echantillonsAvant) {
+        if (echAvant.essaisRoute.includes(essaiType)) {
+          // Charger les essais de cet échantillon
+          try {
+            const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echAvant.id}&type=${essaiType}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            const essaisData = await essaisResponse.json();
+            const essaiAvant = essaisData.results?.[0];
+            
+            // Si l'essai n'a pas encore démarré (pas de date_debut)
+            if (essaiAvant && !essaiAvant.date_debut) {
+              toast.error('Ordre de traitement non respecté', {
+                description: `Vous devez d'abord traiter l'échantillon ${echAvant.code} arrivé avant celui-ci.`,
+                duration: 5000
+              });
+              return;
+            }
+          } catch (error) {
+            console.error('Erreur vérification ordre:', error);
+          }
+        }
+      }
+    }
+    
     setSelectedEssai(essaiType);
     setIsDialogOpen(true);
   };

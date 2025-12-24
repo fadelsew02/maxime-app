@@ -18,6 +18,7 @@ from .views_workflow_data import RapportValidationViewSet, EssaiDataViewSet, Pla
 from .views_essais_rejetes import EssaiRejetesViewSet
 from .views_workflows_rejetes import WorkflowRejetesViewSet
 from .views_capacite import CapaciteViewSet
+from .views_archive import RapportArchiveViewSet
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -40,6 +41,7 @@ router.register(r'planification-data', PlanificationDataViewSet, basename='plani
 router.register(r'essais-rejetes', EssaiRejetesViewSet, basename='essai-rejetes')
 router.register(r'workflows-rejetes', WorkflowRejetesViewSet, basename='workflow-rejetes')
 router.register(r'capacite-sections', CapaciteViewSet, basename='capacite-sections')
+router.register(r'rapports-archives', RapportArchiveViewSet, basename='rapport-archives')
 
 urlpatterns = [
     # JWT Authentication

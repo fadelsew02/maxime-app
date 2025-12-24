@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import WorkflowValidation
 from .serializers_workflow_data import WorkflowValidationSerializer
 
-class WorkflowRejetesViewSet:
+class WorkflowRejetesViewSet(viewsets.ViewSet):
     """API pour gérer les workflows rejetés"""
     
     @action(detail=False, methods=['get'])

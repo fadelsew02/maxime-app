@@ -61,15 +61,34 @@ export function StorageModule() {
       
       // Charger les essais envoyés depuis l'API
       const essaisEnvoyesTemp: Record<string, boolean> = {};
+      const datesEnvoiTemp: Record<string, Date> = {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
       for (const ech of formattedEchantillons) {
         const essais = await getEssaisByEchantillon(ech.id);
+        console.log(`📦 Échantillon ${ech.code}, essais:`, essais);
         essais.forEach(essai => {
           if (essai.date_reception) {
-            essaisEnvoyesTemp[`${ech.code}_${essai.type}`] = true;
+            console.log(`📅 Essai ${essai.type} a date_reception:`, essai.date_reception);
+            const dateReception = new Date(essai.date_reception);
+            dateReception.setHours(0, 0, 0, 0);
+            // Charger la date d'envoi avec clé unique par échantillon
+            const cle = `${ech.code}_${essai.type}`;
+            datesEnvoiTemp[cle] = dateReception;
+            // Marquer comme envoyé seulement si la date est passée ou aujourd'hui
+            if (dateReception <= today) {
+              essaisEnvoyesTemp[cle] = true;
+              console.log(`✅ Essai ${essai.type} marqué comme envoyé`);
+            } else {
+              console.log(`⏳ Essai ${essai.type} en attente (date future)`);
+            }
           }
         });
       }
+      console.log('📅 Dates chargées:', datesEnvoiTemp);
       setEssaisEnvoyes(essaisEnvoyesTemp);
+      // Ne pas écraser dateEnvoiParEssai ici, il sera rempli quand on sélectionne l'échantillon
     } catch (error) {
       console.error('Erreur chargement échantillons:', error);
       toast.error('Erreur lors du chargement des échantillons');
@@ -208,6 +227,7 @@ export function StorageModule() {
 
   // Calculer la date de retour pour un essai spécifique
   const handleDateEnvoiEssaiChange = async (essaiType: string, date: Date | undefined, skipAutoSend = false) => {
+    console.log('📅 handleDateEnvoiEssaiChange:', essaiType, date);
     setDateEnvoiParEssai(prev => ({ ...prev, [essaiType]: date! }));
     if (date && echantillon) {
       const dateRetour = calculateReturnDate(
@@ -216,6 +236,23 @@ export function StorageModule() {
         priorite
       );
       setDateRetourEstimeeParEssai(prev => ({ ...prev, [essaiType]: dateRetour }));
+      
+      // Sauvegarder dans le backend
+      try {
+        const essais = await getEssaisByEchantillon(echantillon.id);
+        const essai = essais.find(e => e.type === essaiType);
+        console.log('💾 Essai trouvé:', essai);
+        if (essai) {
+          const dateStr = format(date, 'yyyy-MM-dd');
+          console.log('💾 Sauvegarde date:', dateStr, 'pour essai ID:', essai.id);
+          await updateEssai(essai.id, {
+            date_reception: dateStr
+          });
+          console.log('✅ Date sauvegardée avec succès');
+        }
+      } catch (error) {
+        console.error('❌ Erreur sauvegarde date:', error);
+      }
       
       // Vérifier immédiatement si cet essai a une date passée ou aujourd'hui
       // MAIS seulement si l'essai n'a PAS été ajusté manuellement ET skipAutoSend est false
@@ -240,12 +277,41 @@ export function StorageModule() {
 
   // Gérer le changement du nombre de jours de retard pour un essai spécifique
   const handleDelayEssaiChange = async (essaiType: string, days: number) => {
+    // Limiter à max 5 jours de retard
+    if (days > 5) {
+      toast.error('Maximum 5 jours de retard autorisés');
+      return;
+    }
+    
+    // Appliquer le délai UNIQUEMENT à cet essai
     setDelayDaysParEssai(prev => ({ ...prev, [essaiType]: days }));
     setEssaisAjustesManuel(prev => ({ ...prev, [essaiType]: true }));
-    if (originalEstimatedDateParEssai[essaiType] && echantillon) {
-      const delayedDate = new Date(originalEstimatedDateParEssai[essaiType]);
-      delayedDate.setDate(delayedDate.getDate() + days);
-      await handleDateEnvoiEssaiChange(essaiType, delayedDate, true); // skipAutoSend = true
+    
+    // Mettre à jour la date pour cet essai
+    if (echantillon) {
+      const originalDate = originalEstimatedDateParEssai[essaiType];
+      if (originalDate) {
+        const delayedDate = new Date(originalDate);
+        delayedDate.setDate(delayedDate.getDate() + days);
+        await handleDateEnvoiEssaiChange(essaiType, delayedDate, true); // skipAutoSend = true
+      }
+      
+      // Persister dans le backend
+      try {
+        const essais = await getEssaisByEchantillon(echantillon.id);
+        const essai = essais.find(e => e.type === essaiType);
+        if (essai && originalDate) {
+          const delayedDate = new Date(originalDate);
+          delayedDate.setDate(delayedDate.getDate() + days);
+          await updateEssai(essai.id, {
+            date_reception: format(delayedDate, 'yyyy-MM-dd')
+          });
+        }
+        toast.success(`Date ${essaiType} mise à jour`);
+      } catch (error) {
+        console.error('Erreur sauvegarde:', error);
+        toast.error('Erreur lors de la sauvegarde');
+      }
     }
   };
 
@@ -276,7 +342,9 @@ export function StorageModule() {
     const ech = echantillons.find(e => e.code === selectedEchantillon);
     if (!ech) return;
 
-    const dateEnvoiStr = format(dateEnvoi, 'yyyy-MM-dd');
+    // Utiliser la date d'aujourd'hui si on envoie manuellement (accéléré)
+    const today = new Date();
+    const dateEnvoiStr = format(today, 'yyyy-MM-dd');
 
     // Vérifier la capacité du laboratoire pour ce type d'essai à cette date
     try {
@@ -308,13 +376,13 @@ export function StorageModule() {
       const essai = essais.find(e => e.type === essaiType);
       
       if (essai) {
-        // Mettre à jour la date_reception de l'essai via l'API
+        // Mettre à jour la date_reception de l'essai via l'API avec la date d'aujourd'hui
         await updateEssai(essai.id, {
           date_reception: dateEnvoiStr
         });
         
         if (!skipNotification) {
-          toast.success(`Essai ${essaiType} planifié`, {
+          toast.success(`Essai ${essaiType} envoyé`, {
             description: `Date d'envoi: ${formatDateFr(dateEnvoiStr)}`,
           });
         }
@@ -466,21 +534,37 @@ export function StorageModule() {
                           setDateRetourEstimeeParEssai({});
                           setDelayDaysParEssai({});
                           setEssaisAjustesManuel({});
-                          // Ne pas réinitialiser essaisEnvoyes car il contient les essais déjà envoyés depuis l'API
-
-                          // Générer des suggestions IA pour chaque essai de cet échantillon
-                          ech.essais.forEach(essaiType => {
-                            const suggestionDate = simulateAIScheduling(ech);
-                            setOriginalEstimatedDateParEssai(prev => ({ ...prev, [essaiType]: suggestionDate }));
-                            setAiSuggestions(prev => ({
-                              ...prev,
-                              [`${ech.code}_${essaiType}`]: {
-                                date: suggestionDate,
-                                message: `Envoi ${essaiType} prévu pour le ${format(suggestionDate, 'PPP \'à\' p', { locale: fr })}`
+                          
+                          // Charger les dates depuis le backend pour cet échantillon
+                          const loadDatesForEchantillon = async () => {
+                            const essais = await getEssaisByEchantillon(ech.id);
+                            const datesTemp: Record<string, Date> = {};
+                            const originalesTemp: Record<string, Date> = {};
+                            
+                            essais.forEach(essai => {
+                              if (essai.date_reception) {
+                                const dateReception = new Date(essai.date_reception);
+                                datesTemp[essai.type] = dateReception;
+                                originalesTemp[essai.type] = dateReception;
+                                console.log(`🔄 Chargé date pour ${essai.type}:`, dateReception);
                               }
-                            }));
-                            handleDateEnvoiEssaiChange(essaiType, suggestionDate);
-                          });
+                            });
+                            
+                            setDateEnvoiParEssai(datesTemp);
+                            setOriginalEstimatedDateParEssai(originalesTemp);
+                            
+                            // Calculer les dates de retour
+                            Object.entries(datesTemp).forEach(([type, date]) => {
+                              const dateRetour = calculateReturnDate(
+                                format(date, 'yyyy-MM-dd'),
+                                [type],
+                                priorite
+                              );
+                              setDateRetourEstimeeParEssai(prev => ({ ...prev, [type]: dateRetour }));
+                            });
+                          };
+                          
+                          loadDatesForEchantillon();
                         }
                       }}
                     >
@@ -643,8 +727,15 @@ export function StorageModule() {
                         
                         const isToday = selectedDate.getTime() === today.getTime();
                         const isPast = selectedDate < today;
+                        const currentDelay = delayDaysParEssai[essaiType] || 0;
                         
-                        if (isToday || isPast) {
+                        // Pas de bouton si retardé (delay > 0)
+                        if (currentDelay > 0) {
+                          return null;
+                        }
+                        
+                        // Bouton "Envoyer maintenant" si accéléré (delay < 0) OU date passée/aujourd'hui
+                        if (currentDelay < 0 || isToday || isPast) {
                           return (
                             <Button
                               className="w-full"
@@ -657,16 +748,8 @@ export function StorageModule() {
                           );
                         }
                         
-                        return (
-                          <Button
-                            className="w-full"
-                            onClick={() => handleEnvoiEssai(essaiType)}
-                            style={{ backgroundColor: '#003366' }}
-                          >
-                            <Send className="h-4 w-4 mr-2" />
-                            Planifier {essaiType}
-                          </Button>
-                        );
+                        // Pas de bouton pour date future non accélérée
+                        return null;
                       })()}
                     </div>
                   ))}

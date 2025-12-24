@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models_workflow_data import RapportValidation, EssaiData, PlanificationData
+from .models import WorkflowValidation
 
 
 class RapportValidationSerializer(serializers.ModelSerializer):
@@ -17,4 +18,10 @@ class EssaiDataSerializer(serializers.ModelSerializer):
 class PlanificationDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlanificationData
+        fields = '__all__'
+
+
+class WorkflowValidationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkflowValidation
         fields = '__all__'

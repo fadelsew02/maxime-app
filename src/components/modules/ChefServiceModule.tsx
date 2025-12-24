@@ -30,12 +30,14 @@ export function ChefServiceModule() {
   const [echantillons, setEchantillons] = useState<EchantillonRapport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEchantillon, setSelectedEchantillon] = useState<EchantillonRapport | null>(null);
+  const [workflowsMap, setWorkflowsMap] = useState<Map<string, any>>(new Map());
 
   const loadRapports = async () => {
     setLoading(true);
     const rapports: EchantillonRapport[] = [];
 
     const workflows = await workflowApi.getByEtape('chef_service');
+    const wfMap = new Map();
     
     for (const workflow of workflows) {
       const code = workflow.code_echantillon;
@@ -115,9 +117,11 @@ export function ChefServiceModule() {
         fileData: workflow.file_data || '',
         essais
       });
+      wfMap.set(code, workflow);
     }
 
     setEchantillons(rapports);
+    setWorkflowsMap(wfMap);
     setLoading(false);
   };
 
@@ -161,8 +165,7 @@ export function ChefServiceModule() {
               </div>
             ) : (
               echantillons.map((ech) => {
-                // Vérifier si le rapport a été envoyé au DT via l'API
-                const workflow = await workflowApi.getByCode(ech.code);
+                const workflow = workflowsMap.get(ech.code);
                 const isEnvoyeDT = workflow?.etape_actuelle === 'directeur_technique';
                 
                 return (

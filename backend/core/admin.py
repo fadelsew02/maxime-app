@@ -7,6 +7,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import User, Client, Echantillon, Essai, Notification, ValidationHistory
 from .models_action_log import ActionLog
 from .models_workflow_data import RapportValidation, EssaiData, PlanificationData
+from .models_archive import RapportArchive
 
 
 @admin.register(User)
@@ -176,3 +177,14 @@ class PlanificationDataAdmin(admin.ModelAdmin):
     search_fields = ['echantillon_code', 'operateur_assigne']
     readonly_fields = ['created_at', 'updated_at']
     date_hierarchy = 'date_planifiee'
+
+
+@admin.register(RapportArchive)
+class RapportArchiveAdmin(admin.ModelAdmin):
+    """Administration des rapports archivés"""
+    
+    list_display = ['code_echantillon', 'client_name', 'etape_envoi', 'envoye_par', 'date_envoi']
+    list_filter = ['etape_envoi', 'date_envoi']
+    search_fields = ['code_echantillon', 'client_name', 'envoye_par__username']
+    readonly_fields = ['created_at', 'date_envoi']
+    date_hierarchy = 'date_envoi'

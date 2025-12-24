@@ -98,6 +98,21 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         return EchantillonSerializer
     
     def perform_create(self, serializer):
+        # Vérifier le délai de 24h pour le client
+        client = serializer.validated_data.get('client')
+        if client:
+            derniers_echantillons = Echantillon.objects.filter(
+                client=client
+            ).order_by('-created_at').first()
+            
+            if derniers_echantillons:
+                delai = timezone.now() - derniers_echantillons.created_at
+                if delai > timedelta(hours=24):
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({
+                        'client': 'Impossible d\'ajouter un échantillon pour ce client après 24h. Veuillez créer un nouveau client.'
+                    })
+        
         serializer.save(created_by=self.request.user)
     
     @action(detail=False, methods=['get'])
@@ -183,6 +198,25 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(echantillon)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def retarder(self, request, pk=None):
+        """Retarder un échantillon et reprogrammer automatiquement"""
+        from .reprogrammation_helper import reprogrammer_echantillon_retarde
+        
+        echantillon = self.get_object()
+        jours_retard = request.data.get('jours_retard', 4)
+        
+        result = reprogrammer_echantillon_retarde(str(echantillon.id), jours_retard)
+        
+        if result['success']:
+            serializer = self.get_serializer(echantillon)
+            return Response({
+                **result,
+                'echantillon': serializer.data
+            })
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['get'])
     def essais(self, request, pk=None):
@@ -587,7 +621,14 @@ class EssaiViewSet(viewsets.ModelViewSet, EssaiRejetesViewSet):
         essai.statut_validation = 'rejected'
         essai.commentaires_validation = request.data.get('commentaires', '')
         essai.date_rejet = timezone.now().date()
+        essai.priorite = 'urgente'  # Marquer automatiquement comme prioritaire
         essai.save()
+        
+        # Marquer l'échantillon comme prioritaire aussi
+        echantillon = essai.echantillon
+        if echantillon.priorite != 'urgente':
+            echantillon.priorite = 'urgente'
+            echantillon.save()
         
         serializer = self.get_serializer(essai)
         return Response(serializer.data)

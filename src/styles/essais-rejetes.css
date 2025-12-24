@@ -1,0 +1,25 @@
+/* Styles pour les essais rejetés */
+.essai-rejete {
+  background-color: #fee !important;
+  border-left: 4px solid #dc3545 !important;
+}
+
+.essai-rejete-badge {
+  background-color: #dc3545 !important;
+  color: white !important;
+  animation: pulse 2s infinite;
+}
+
+.essai-prioritaire {
+  background-color: #fff3cd !important;
+  border-left: 4px solid #ffc107 !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

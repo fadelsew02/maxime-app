@@ -672,15 +672,18 @@ Date retour client: ${dateRetour.toLocaleDateString('fr-FR')}`;
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="numeroSondage">Numéro de sondage</Label>
-                <Input
-                  id="numeroSondage"
-                  value={formData.numeroSondage}
-                  onChange={(e) => setFormData({ ...formData, numeroSondage: e.target.value })}
-                  placeholder="Ex: SC-01"
-                />
-              </div>
+              {formData.sondage === 'carotte' && (
+                <div className="space-y-2">
+                  <Label htmlFor="numeroSondage">Numéro de sondage *</Label>
+                  <Input
+                    id="numeroSondage"
+                    value={formData.numeroSondage}
+                    onChange={(e) => setFormData({ ...formData, numeroSondage: e.target.value })}
+                    placeholder="Ex: SC-01"
+                    required
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="nappe">Nappe phréatique *</Label>

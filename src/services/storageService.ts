@@ -22,7 +22,11 @@ class StorageService {
         body: JSON.stringify({ key, value: JSON.stringify(value) }),
       });
       
-      if (!response.ok) throw new Error('Erreur sauvegarde');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Erreur API storage:', response.status, errorData);
+        throw new Error(`Erreur sauvegarde: ${response.status}`);
+      }
     } catch (error) {
       console.error('Erreur setItem:', error);
       throw error;
@@ -36,13 +40,18 @@ class StorageService {
         headers: this.getAuthHeaders(),
       });
       
-      if (!response.ok) return null;
+      if (!response.ok) {
+        // Fallback vers localStorage
+        const localValue = localStorage.getItem(key);
+        return localValue ? JSON.parse(localValue) : null;
+      }
       
       const data = await response.json();
       return data.value ? JSON.parse(data.value) : null;
     } catch (error) {
-      console.error('Erreur getItem:', error);
-      return null;
+      // Fallback vers localStorage
+      const localValue = localStorage.getItem(key);
+      return localValue ? JSON.parse(localValue) : null;
     }
   }
 

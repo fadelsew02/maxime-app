@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
@@ -6,7 +6,7 @@ from datetime import timedelta, datetime
 from .models import Echantillon, Essai, CapaciteLaboratoire, Notification
 from .serializers import EchantillonSerializer
 
-class CapaciteViewSet:
+class CapaciteViewSet(viewsets.ViewSet):
     """API pour gérer la capacité des sections"""
     
     @action(detail=False, methods=['post'])

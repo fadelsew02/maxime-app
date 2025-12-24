@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { storageService } from '../services/storageService';
 
 export interface Notification {
   id: string;
@@ -41,27 +40,23 @@ interface NotificationProviderProps {
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children, userRole }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Load notifications from backend on mount
+  // Load notifications from localStorage on mount
   useEffect(() => {
-    const loadNotifications = async () => {
-      const savedNotifications = await storageService.getItem(`notifications_${userRole}`);
-      if (savedNotifications) {
-        const parsed = JSON.parse(savedNotifications);
-        // Convert timestamp strings back to Date objects
-        const notificationsWithDates = parsed.map((n: any) => ({
-          ...n,
-          timestamp: new Date(n.timestamp)
-        }));
-        setNotifications(notificationsWithDates);
-      }
-    };
-    loadNotifications();
+    const savedNotifications = localStorage.getItem(`notifications_${userRole}`);
+    if (savedNotifications) {
+      const parsed = JSON.parse(savedNotifications);
+      const notificationsWithDates = parsed.map((n: any) => ({
+        ...n,
+        timestamp: new Date(n.timestamp)
+      }));
+      setNotifications(notificationsWithDates);
+    }
   }, [userRole]);
 
-  // Save notifications to backend whenever they change
+  // Save notifications to localStorage whenever they change
   useEffect(() => {
     if (notifications.length > 0 || userRole) {
-      storageService.setItem(`notifications_${userRole}`, JSON.stringify(notifications));
+      localStorage.setItem(`notifications_${userRole}`, JSON.stringify(notifications));
     }
   }, [notifications, userRole]);
 

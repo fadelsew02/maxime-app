@@ -252,9 +252,9 @@ export function DashboardHome({ user }: DashboardHomeProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Filtrage des échantillons selon le statut
-  const filteredEchantillons = statusFilter === 'all'
-    ? echantillons
-    : echantillons.filter(e => e.statut === statusFilter);
+  const filteredEchantillons = Array.isArray(echantillons) 
+    ? (statusFilter === 'all' ? echantillons : echantillons.filter(e => e.statut === statusFilter))
+    : [];
 
   // Fonction pour obtenir le nom du client
   const getClientName = (clientCode: string) => {
@@ -332,10 +332,10 @@ export function DashboardHome({ user }: DashboardHomeProps) {
   // Accueil spécifique pour réceptionniste
   if (user.role === 'receptionniste') {
     return <ReceptionnisteHome stats={{
-      enAttente: echantillons.filter(e => e.statut === 'stockage').length,
-      enCours: echantillons.filter(e => e.statut === 'essais').length,
-      termines: echantillons.filter(e => e.statut === 'decodification').length,
-      valides: echantillons.filter(e => e.statut === 'valide').length,
+      enAttente: Array.isArray(echantillons) ? echantillons.filter(e => e.statut === 'stockage').length : 0,
+      enCours: Array.isArray(echantillons) ? echantillons.filter(e => e.statut === 'essais').length : 0,
+      termines: Array.isArray(echantillons) ? echantillons.filter(e => e.statut === 'decodification').length : 0,
+      valides: Array.isArray(echantillons) ? echantillons.filter(e => e.statut === 'valide').length : 0,
     }} />;
   }
 
@@ -520,9 +520,10 @@ export function DashboardHome({ user }: DashboardHomeProps) {
   );
 }
 
-function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssaiInfo: (id: string, type: string) => Promise<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null }> }) {
-  const [infoOedo, setInfoOedo] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null }>({ termine: false, dateEnvoi: null, dateFin: null });
-  const [infoCis, setInfoCis] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null }>({ termine: false, dateEnvoi: null, dateFin: null });
+function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssaiInfo: (id: string, type: string) => Promise<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null; operateur: string | null }> }) {
+  const [infoOedo, setInfoOedo] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null; operateur: string | null }>({ termine: false, dateEnvoi: null, dateFin: null, operateur: null });
+  const [infoCis, setInfoCis] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateFin: string | null; operateur: string | null }>({ termine: false, dateEnvoi: null, dateFin: null, operateur: null });
+  const [dateRetourClient, setDateRetourClient] = React.useState<string>('-');
 
   React.useEffect(() => {
     if (echantillon.essais_types?.includes('Oedometre')) {
@@ -532,6 +533,43 @@ function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssa
       getEssaiInfo(echantillon.id, 'Cisaillement').then(setInfoCis);
     }
   }, [echantillon.id, echantillon.code, getEssaiInfo]);
+
+  // Calculer la date de retour client
+  React.useEffect(() => {
+    const durees: Record<string, number> = {
+      Oedometre: 18,
+      Cisaillement: 8,
+    };
+    
+    let dateRetourMax: Date | null = null;
+    
+    // Pour chaque essai, calculer sa date de fin
+    if (echantillon.essais_types?.includes('Oedometre') && infoOedo.dateEnvoi) {
+      const dateEnvoi = new Date(infoOedo.dateEnvoi.split('/').reverse().join('-'));
+      const dateFin = new Date(dateEnvoi);
+      dateFin.setDate(dateFin.getDate() + durees.Oedometre);
+      if (!dateRetourMax || dateFin > dateRetourMax) {
+        dateRetourMax = dateFin;
+      }
+    }
+    
+    if (echantillon.essais_types?.includes('Cisaillement') && infoCis.dateEnvoi) {
+      const dateEnvoi = new Date(infoCis.dateEnvoi.split('/').reverse().join('-'));
+      const dateFin = new Date(dateEnvoi);
+      dateFin.setDate(dateFin.getDate() + durees.Cisaillement);
+      if (!dateRetourMax || dateFin > dateRetourMax) {
+        dateRetourMax = dateFin;
+      }
+    }
+    
+    // Ajouter 2 jours de marge pour la date de retour client
+    if (dateRetourMax) {
+      dateRetourMax.setDate(dateRetourMax.getDate() + 2);
+      setDateRetourClient(dateRetourMax.toLocaleDateString('fr-FR'));
+    } else {
+      setDateRetourClient('-');
+    }
+  }, [infoOedo, infoCis, echantillon.essais_types]);
 
   // Fonction pour déterminer le statut et la couleur en fonction de l'essai individuel
   const getStatutDisplay = (essaiTermine: boolean, essaiDateEnvoi: string | null) => {
@@ -568,6 +606,11 @@ function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssa
                 {statutOedo.text}
               </Badge>
             </div>
+            {infoOedo.operateur && (
+              <div className="text-xs mt-1" style={{ color: '#003366' }}>
+                Op: {infoOedo.operateur}
+              </div>
+            )}
             {infoOedo.dateFin && (
               <div className="text-xs mt-1" style={{ color: '#6C757D' }}>
                 {infoOedo.dateFin}
@@ -589,6 +632,11 @@ function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssa
                 {statutCis.text}
               </Badge>
             </div>
+            {infoCis.operateur && (
+              <div className="text-xs mt-1" style={{ color: '#003366' }}>
+                Op: {infoCis.operateur}
+              </div>
+            )}
             {infoCis.dateFin && (
               <div className="text-xs mt-1" style={{ color: '#6C757D' }}>
                 {infoCis.dateFin}
@@ -600,7 +648,9 @@ function EssaiMecaRow({ echantillon, getEssaiInfo }: { echantillon: any; getEssa
         )}
       </td>
       <td className="p-3">
-        <span className="text-sm text-gray-500">-</span>
+        <span className="text-sm font-medium" style={{ color: dateRetourClient === '-' ? '#6C757D' : '#DC3545' }}>
+          {dateRetourClient}
+        </span>
       </td>
     </tr>
   );
@@ -685,11 +735,12 @@ function MecaDashboard() {
         return {
           termine: essai.statut === 'termine',
           dateEnvoi: essai.date_reception ? new Date(essai.date_reception).toLocaleDateString('fr-FR') : null,
-          dateFin: essai.date_fin ? new Date(essai.date_fin).toLocaleDateString('fr-FR') : null
+          dateFin: essai.date_fin ? new Date(essai.date_fin).toLocaleDateString('fr-FR') : null,
+          operateur: essai.operateur || null
         };
       }
     } catch (e) {}
-    return { termine: false, dateEnvoi: null, dateFin: null };
+    return { termine: false, dateEnvoi: null, dateFin: null, operateur: null };
   };
 
   return (
@@ -1227,7 +1278,7 @@ function ChefProjetDashboard() {
 }
 
 function EssaiRouteCell({ echantillonId, type, dateEnvoi, echantillonStatut }: { echantillonId: string; type: string; dateEnvoi: string | null; echantillonStatut: string }) {
-  const [info, setInfo] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateReception: string | null }>({ termine: false, dateEnvoi: null, dateReception: null });
+  const [info, setInfo] = React.useState<{ termine: boolean; dateEnvoi: string | null; dateReception: string | null; dateFin: string | null; operateur: string | null }>({ termine: false, dateEnvoi: null, dateReception: null, dateFin: null, operateur: null });
 
   React.useEffect(() => {
     const loadEssaiInfo = async () => {
@@ -1240,12 +1291,24 @@ function EssaiRouteCell({ echantillonId, type, dateEnvoi, echantillonStatut }: {
         });
         const data = await response.json();
         if (data.results && data.results.length > 0) {
-          // Trouver l'essai qui correspond à cet échantillon spécifique
           const essai = data.results.find((e: any) => e.echantillon === echantillonId) || data.results[0];
+          
+          // Calculer la date de fin si date_reception existe
+          let dateFin = null;
+          if (essai.date_reception) {
+            const durees: Record<string, number> = { AG: 5, Proctor: 4, CBR: 5 };
+            const dateReception = new Date(essai.date_reception);
+            const dateFinCalculee = new Date(dateReception);
+            dateFinCalculee.setDate(dateFinCalculee.getDate() + durees[type]);
+            dateFin = dateFinCalculee.toLocaleDateString('fr-FR');
+          }
+          
           setInfo({
             termine: essai.statut === 'termine',
             dateEnvoi: essai.date_envoi_decodification ? new Date(essai.date_envoi_decodification).toLocaleDateString('fr-FR') : null,
-            dateReception: essai.date_reception ? new Date(essai.date_reception).toLocaleDateString('fr-FR') : null
+            dateReception: essai.date_reception ? new Date(essai.date_reception).toLocaleDateString('fr-FR') : null,
+            dateFin: dateFin,
+            operateur: essai.operateur || null
           });
         }
       } catch (e) {}
@@ -1253,16 +1316,13 @@ function EssaiRouteCell({ echantillonId, type, dateEnvoi, echantillonStatut }: {
     loadEssaiInfo();
   }, [echantillonId, type]);
 
-  // Déterminer le statut et la couleur en fonction de l'essai individuel UNIQUEMENT
   const getStatutDisplay = () => {
     if (info.termine) {
       return { text: 'Terminé', color: '#28A745' };
     }
-    // Si l'essai a une date_reception (envoyé depuis stockage), il est en cours
     if (info.dateReception) {
       return { text: 'En cours', color: '#FFC107' };
     }
-    // Sinon il est encore en stockage (même si l'échantillon a statut 'essais')
     return { text: 'Stockage', color: '#17A2B8' };
   };
 
@@ -1270,15 +1330,24 @@ function EssaiRouteCell({ echantillonId, type, dateEnvoi, echantillonStatut }: {
 
   return (
     <div>
-      <span className="text-sm">{dateEnvoi || '-'}</span>
-      <div className="mt-1">
+      <div className="text-xs mb-1" style={{ color: '#6C757D' }}>
+        {info.dateReception || '-'}
+      </div>
+      <div className="my-1">
         <Badge style={{ backgroundColor: statutDisplay.color, color: '#FFFFFF', fontSize: '10px', padding: '2px 6px' }}>
           {statutDisplay.text}
         </Badge>
-        {info.termine && info.dateEnvoi && (
-          <div className="text-xs mt-1" style={{ color: '#6C757D' }}>Déco: {info.dateEnvoi}</div>
-        )}
       </div>
+      {info.operateur && (
+        <div className="text-xs mt-1" style={{ color: '#003366' }}>
+          Op: {info.operateur}
+        </div>
+      )}
+      {info.dateFin && (
+        <div className="text-xs mt-1" style={{ color: '#003366', fontWeight: 500 }}>
+          Fin: {info.dateFin}
+        </div>
+      )}
     </div>
   );
 }
@@ -1393,6 +1462,31 @@ function RouteDashboard() {
                   </tr>
                 ) : (
                   echantillons.map((echantillon) => {
+                    // Calculer la date de retour client basée sur les dates de fin des essais
+                    const durees: Record<string, number> = { AG: 5, Proctor: 4, CBR: 5 };
+                    let dateRetourMax: Date | null = null;
+                    
+                    ['AG', 'Proctor', 'CBR'].forEach(essaiType => {
+                      if (echantillon.essais_types?.includes(essaiType)) {
+                        const dateEnvoiKey = `date_envoi_${essaiType.toLowerCase()}`;
+                        const dateEnvoi = echantillon[dateEnvoiKey];
+                        if (dateEnvoi) {
+                          const dateEnvoiParsed = new Date(dateEnvoi.split('/').reverse().join('-'));
+                          const dateFin = new Date(dateEnvoiParsed);
+                          dateFin.setDate(dateFin.getDate() + durees[essaiType]);
+                          if (!dateRetourMax || dateFin > dateRetourMax) {
+                            dateRetourMax = dateFin;
+                          }
+                        }
+                      }
+                    });
+                    
+                    // Ajouter 2 jours de marge pour la date de retour client
+                    if (dateRetourMax) {
+                      dateRetourMax.setDate(dateRetourMax.getDate() + 2);
+                    }
+                    
+                    const dateRetourClient = dateRetourMax ? dateRetourMax.toLocaleDateString('fr-FR') : '-';
                     
                     return (
                       <tr key={echantillon.id} className="border-b hover:bg-gray-50">
@@ -1430,7 +1524,9 @@ function RouteDashboard() {
                           )}
                         </td>
                         <td className="p-3">
-                          <span className="text-sm text-gray-500">-</span>
+                          <span className="text-sm font-medium" style={{ color: dateRetourClient === '-' ? '#6C757D' : '#DC3545' }}>
+                            {dateRetourClient}
+                          </span>
                         </td>
                       </tr>
                     );
@@ -1755,6 +1851,8 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
   const [dateDebut, setDateDebut] = useState<Date | undefined>();
   const [dateFin, setDateFin] = useState<Date | undefined>();
   const [natureFilter, setNatureFilter] = useState<string>('all');
+  const [clients, setClients] = useState<Client[]>([]);
+  const [echantillonsAPI, setEchantillonsAPI] = useState<any[]>([]);
 
   // Filtrer les clients selon les critères
   const filteredClients = clients.filter(client => {
@@ -2348,7 +2446,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8">
-                                  <QRCode value={`Code: ${ech.code}\nNature: ${ech.nature}\nProfondeurs: ${ech.profondeurDebut}m - ${ech.profondeurFin}m\nNappe phréatique: ${ech.nappe ? ech.nappe + ' m' : 'Non renseignée'}\nType de sondage: ${ech.sondage === 'carotte' ? 'Carotté' : 'Vrac'}\nEssais demandés: ${(ech.essais || []).join(', ')}\nEnvoi prévu pour: ${simulerIADateEnvoi(ech).date}\nDurée en attente de stock: ${simulerIADateEnvoi(ech).delaiJours} jours\nDate de retour essai: ${simulerIADateEnvoi(ech).dateRetour}${ech.photo ? '\nPhoto: ' + ech.photo : ''}`} size={32} />
+                                  <QRCode value={`Code: ${ech.code}\nNature: ${ech.nature}\nProfondeurs: ${ech.profondeurDebut}m - ${ech.profondeurFin}m\nNappe phréatique: ${ech.nappe ? ech.nappe + ' m' : 'Non renseignée'}\nType de sondage: ${ech.sondage === 'carotte' ? 'Carotté' : 'Vrac'}\nEssais demandés: ${(ech.essais || []).join(', ')}\nEnvoi prévu pour: ${simulerIADateEnvoi(ech).date}\nDurée en attente de stock: ${simulerIADateEnvoi(ech).delaiJours} jours\nDate de retour essai: ${simulerIADateEnvoi(ech).dateRetour}${ech.photo ? '\nTélécharger photo: http://127.0.0.1:8000' + ech.photo : ''}`} size={32} />
                                 </div>
                                 <span className="text-xs" style={{ color: '#A9A9A9' }}>
                                   {ech.qrCode}
@@ -2485,11 +2583,23 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                               className="max-w-full h-auto rounded-lg border"
                               style={{ maxHeight: '200px' }}
                             />
-                            <p className="text-xs mt-2 text-blue-600">
-                              <a href={results.data.photo} target="_blank" rel="noopener noreferrer">
-                                Ouvrir la photo en plein écran
+                            <div className="flex gap-2 mt-2">
+                              <a 
+                                href={results.data.photo} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                Ouvrir en plein écran
                               </a>
-                            </p>
+                              <a 
+                                href={results.data.photo} 
+                                download
+                                className="text-xs text-green-600 hover:underline font-semibold"
+                              >
+                                ⬇️ Télécharger l'image
+                              </a>
+                            </div>
                           </div>
                         </div>
                       )}

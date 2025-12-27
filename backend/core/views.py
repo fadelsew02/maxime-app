@@ -379,6 +379,7 @@ class EchantillonViewSet(viewsets.ModelViewSet):
                     total_echantillons_client = Echantillon.objects.filter(client_id=client_id).count()
                 
                 clients_data[client_key] = {
+                    'clientId': str(client_id) if client_id else None,  # ← AJOUT du clientId
                     'clientNom': client_nom,
                     'chefProjet': echantillon.chef_projet or '-',
                     'echantillons': [],

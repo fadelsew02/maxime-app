@@ -34,6 +34,7 @@ interface EchantillonGroupe {
 }
 
 interface ClientGroupe {
+  clientId?: string;
   clientNom: string;
   chefProjet: string;
   echantillons: EchantillonGroupe[];

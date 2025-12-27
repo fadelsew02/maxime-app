@@ -63,6 +63,21 @@ class UserViewSet(viewsets.ModelViewSet):
         """Retourne l'utilisateur connecté"""
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def chefs_projet(self, request):
+        """Retourne la liste des chefs de projet"""
+        chefs = User.objects.filter(role='chef_projet', is_active=True).order_by('first_name', 'last_name')
+        data = [
+            {
+                'id': str(chef.id),
+                'username': chef.username,
+                'full_name': f"{chef.first_name} {chef.last_name}".strip() or chef.username,
+                'email': chef.email
+            }
+            for chef in chefs
+        ]
+        return Response(data)
 
 
 class ClientViewSet(viewsets.ModelViewSet):
@@ -74,6 +89,18 @@ class ClientViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['code', 'nom', 'contact', 'projet', 'email']
     ordering_fields = ['created_at', 'nom']
+    
+    def get_queryset(self):
+        """Filtrer les clients selon les paramètres de requête"""
+        queryset = super().get_queryset()
+        
+        # Filtrer par clients récents (dernières 24h)
+        recent_only = self.request.query_params.get('recent', None)
+        if recent_only and recent_only.lower() in ['true', '1', 'yes']:
+            twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+            queryset = queryset.filter(created_at__gte=twenty_four_hours_ago)
+        
+        return queryset
     
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

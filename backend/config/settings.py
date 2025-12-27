@@ -49,7 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware_action_log.ActionLogMiddleware',  # Logging des actions
+    # 'core.middleware_action_log.ActionLogMiddleware',  # Disabled: models_action_log.py missing
 ]
 
 ROOT_URLCONF = 'config.urls'

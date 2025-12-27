@@ -30,8 +30,9 @@ interface PaginatedResponse<T> {
 }
 
 // Récupérer tous les clients
-export const getClients = async (): Promise<Client[]> => {
-  const response = await apiRequest<PaginatedResponse<Client>>('/clients/');
+export const getClients = async (recentOnly: boolean = false): Promise<Client[]> => {
+  const url = recentOnly ? '/clients/?recent=true' : '/clients/';
+  const response = await apiRequest<PaginatedResponse<Client>>(url);
   return response.results;
 };
 

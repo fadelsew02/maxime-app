@@ -12,11 +12,11 @@ import QRCode from 'react-qr-code';
 import { toast } from 'sonner';
 import {
   naturesEchantillons,
-  chefsProjets,
 } from '../../lib/mockData';
 import { createClient, Client } from '../../lib/clientService';
 import { createEchantillon } from '../../lib/echantillonService';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { getChefsProjet, ChefProjet } from '../../lib/userService';
 
 export function ReceptionModule() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -205,6 +205,8 @@ function EchantillonForm({ refreshTrigger }: EchantillonFormProps) {
   const [selectedClient, setSelectedClient] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
+  const [chefsProjet, setChefsProjet] = useState<ChefProjet[]>([]);
+  const [loadingChefs, setLoadingChefs] = useState(true);
   const [formData, setFormData] = useState({
     nature: '',
     profondeurDebut: '',
@@ -226,7 +228,8 @@ function EchantillonForm({ refreshTrigger }: EchantillonFormProps) {
       setLoadingClients(true);
       try {
         const { getClients } = await import('../../lib/clientService');
-        const data = await getClients();
+        // Récupérer uniquement les clients des dernières 24h
+        const data = await getClients(true);
         setClients(data);
       } catch (error) {
         console.error('Erreur lors du chargement des clients:', error);
@@ -238,6 +241,24 @@ function EchantillonForm({ refreshTrigger }: EchantillonFormProps) {
 
     loadClients();
   }, [refreshTrigger]);
+
+  // Charger les chefs de projet
+  useEffect(() => {
+    const loadChefsProjet = async () => {
+      setLoadingChefs(true);
+      try {
+        const data = await getChefsProjet();
+        setChefsProjet(data);
+      } catch (error) {
+        console.error('Erreur lors du chargement des chefs de projet:', error);
+        toast.error('Erreur lors du chargement des chefs de projet');
+      } finally {
+        setLoadingChefs(false);
+      }
+    };
+
+    loadChefsProjet();
+  }, []);
 
   const essaisDisponibles = [
     { id: 'AG', label: 'Tamisage (AG)', duree: '5 jours' },
@@ -610,10 +631,10 @@ Date retour client: ${dateRetour.toLocaleDateString('fr-FR')}`;
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="client">Client *</Label>
+              <Label htmlFor="client">Client * (dernières 24h)</Label>
               <Select value={selectedClient} onValueChange={setSelectedClient} required>
                 <SelectTrigger id="client" disabled={loadingClients}>
-                  <SelectValue placeholder={loadingClients ? "Chargement..." : "Sélectionner un client"} />
+                  <SelectValue placeholder={loadingClients ? "Chargement..." : "Sélectionner un client récent"} />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.isArray(clients) && clients.length > 0 ? (
@@ -624,7 +645,7 @@ Date retour client: ${dateRetour.toLocaleDateString('fr-FR')}`;
                     ))
                   ) : (
                     <SelectItem value="no-client" disabled>
-                      {loadingClients ? "Chargement..." : "Aucun client disponible"}
+                      {loadingClients ? "Chargement..." : "Aucun client créé dans les 24 dernières heures"}
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -718,16 +739,26 @@ Date retour client: ${dateRetour.toLocaleDateString('fr-FR')}`;
 
               <div className="space-y-2">
                 <Label htmlFor="chefProjet">Chef de projet *</Label>
-                <Select value={formData.chefProjet} onValueChange={(value) => setFormData({ ...formData, chefProjet: value })}>
+                <Select 
+                  value={formData.chefProjet} 
+                  onValueChange={(value) => setFormData({ ...formData, chefProjet: value })}
+                  disabled={loadingChefs}
+                >
                   <SelectTrigger id="chefProjet">
-                    <SelectValue placeholder="Sélectionner le chef de projet" />
+                    <SelectValue placeholder={loadingChefs ? "Chargement..." : "Sélectionner le chef de projet"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {chefsProjets.map((chef) => (
-                      <SelectItem key={chef} value={chef}>
-                        {chef}
+                    {chefsProjet.length > 0 ? (
+                      chefsProjet.map((chef) => (
+                        <SelectItem key={chef.id} value={chef.full_name}>
+                          {chef.full_name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-chef" disabled>
+                        {loadingChefs ? "Chargement..." : "Aucun chef de projet disponible"}
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -801,7 +832,7 @@ Date retour client: ${dateRetour.toLocaleDateString('fr-FR')}`;
             </div>
 
             <div className="flex justify-end pt-4">
-              <Button type="submit" style={{ backgroundColor: '#003366' }} disabled={loading || loadingClients}>
+              <Button type="submit" style={{ backgroundColor: '#003366' }} disabled={loading || loadingClients || loadingChefs}>
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

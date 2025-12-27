@@ -468,6 +468,7 @@ class WorkflowValidation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     echantillon = models.ForeignKey(Echantillon, on_delete=models.CASCADE, related_name='workflow_validations')
     code_echantillon = models.CharField(max_length=20)
+    client_id = models.UUIDField(null=True, blank=True, help_text="ID du client pour regroupement")
     client_name = models.CharField(max_length=200)
     
     # Fichiers

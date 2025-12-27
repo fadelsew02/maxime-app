@@ -361,6 +361,7 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
             const workflow = await workflowApi.create({
               echantillon: echantillonId,
               code_echantillon: echantillon.code,
+              client_id: client.clientId,
               client_name: client.clientNom,
               etape_actuelle: 'chef_projet',
               statut: 'en_attente',

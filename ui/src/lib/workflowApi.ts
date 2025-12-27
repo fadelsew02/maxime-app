@@ -9,11 +9,13 @@ export interface WorkflowData {
   id?: number;
   echantillon: number;
   code_echantillon: string;
+  client_id?: string;
   etape_actuelle: 'chef_projet' | 'chef_service' | 'directeur_technique' | 'directeur_snertp' | 'marketing' | 'client';
   statut: 'en_attente' | 'valide' | 'rejete';
   file_data?: string;
   file_name?: string;
   client_name?: string;
+  created_at?: string;
   
   // Responsable Traitement
   observations_traitement?: string;

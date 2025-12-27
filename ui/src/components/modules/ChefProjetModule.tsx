@@ -59,22 +59,15 @@ export function ChefProjetModule() {
     
     for (const workflow of workflowsActifs) {
       const code = workflow.code_echantillon;
-      let clientName = workflow.client_name || '-';
+      const clientName = workflow.client_name || '-';
+      const clientId = workflow.client_id || code; // Utiliser client_id du workflow
       
-      // Extraire le code client depuis client_name (format: "NOM (CODE)")
-      let clientCode = '';
-      const match = clientName.match(/\(([^)]+)\)/);
-      if (match) {
-        clientCode = match[1];
-      }
+      console.log(`Échantillon ${code}: clientId=${clientId}, clientName=${clientName}`);
       
-      // IMPORTANT: TOUJOURS grouper par CODE client unique
-      const clientKey = clientCode || code;
-      console.log(`Échantillon ${code}: clientName=${clientName}, clientCode=${clientCode}, clientKey=${clientKey}`);
-      
-      if (!clientsMap.has(clientKey)) {
-        clientsMap.set(clientKey, {
-          clientId: clientCode,
+      // Grouper par client_id
+      if (!clientsMap.has(clientId)) {
+        clientsMap.set(clientId, {
+          clientId: clientId,
           clientName: clientName,
           echantillons: [],
           dateEnvoi: workflow.created_at || new Date().toISOString(),
@@ -148,7 +141,7 @@ export function ChefProjetModule() {
       }
       
       if (echantillonGroupe.essais.length > 0) {
-        clientsMap.get(clientKey)!.echantillons.push(echantillonGroupe);
+        clientsMap.get(clientId)!.echantillons.push(echantillonGroupe);
       }
     }
 

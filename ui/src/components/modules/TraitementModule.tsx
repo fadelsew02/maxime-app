@@ -300,17 +300,31 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
   const [selectedEchantillon, setSelectedEchantillon] = useState<EchantillonGroupe | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
+  const [rejectionComment, setRejectionComment] = useState<string>('');
 
   useEffect(() => {
     const checkIfAlreadySent = async () => {
       try {
+        let hasRejected = false;
+        let rejectionReason = '';
+        
         for (const echantillon of client.echantillons) {
           const workflow = await workflowApi.getByCode(echantillon.code);
-          if (workflow && workflow.etape_actuelle !== 'chef_projet' && workflow.statut !== 'rejete') {
-            setSentToChefProjet(true);
-            break;
+          if (workflow) {
+            if (workflow.statut === 'rejete' && workflow.etape_actuelle === 'traitement') {
+              hasRejected = true;
+              rejectionReason = workflow.raison_rejet || workflow.commentaire_chef_projet || 'Aucun commentaire';
+            }
+            if (workflow.etape_actuelle !== 'traitement' && workflow.statut !== 'rejete') {
+              setSentToChefProjet(true);
+              break;
+            }
           }
         }
+        
+        setIsRejected(hasRejected);
+        setRejectionComment(rejectionReason);
       } catch (error) {
         console.error('Erreur vérification workflow:', error);
       } finally {
@@ -402,6 +416,22 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
 
   return (
     <div className="space-y-6">
+      {isRejected && (
+        <div className="p-4 rounded-lg" style={{ backgroundColor: '#FFF3CD', border: '2px solid #DC3545' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="h-5 w-5" style={{ color: '#DC3545' }} />
+            <span className="font-semibold" style={{ color: '#DC3545' }}>Rapport rejeté par le Chef Projet</span>
+          </div>
+          <div className="mt-2">
+            <Label className="text-sm font-semibold">Raison du rejet:</Label>
+            <p className="text-sm mt-1" style={{ color: '#856404' }}>{rejectionComment}</p>
+          </div>
+          <p className="text-xs mt-3" style={{ color: '#856404' }}>
+            Veuillez corriger le rapport et le renvoyer au chef de projet.
+          </p>
+        </div>
+      )}
+      
       <div className="space-y-2">
         <Label>Client</Label>
         <p className="font-semibold">{client.clientNom}</p>
@@ -503,7 +533,7 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
           onClick={handleSendToChefProjet}
           disabled={!traitementFile || sentToChefProjet || loading || !client.tousEchantillonsPrets || isSubmitting}
           style={{ 
-            backgroundColor: sentToChefProjet ? '#6C757D' : (!client.tousEchantillonsPrets ? '#FFC107' : '#003366'),
+            backgroundColor: sentToChefProjet ? '#6C757D' : (!client.tousEchantillonsPrets ? '#FFC107' : (isRejected ? '#FD7E14' : '#003366')),
             color: '#FFFFFF'
           }}
           className="w-full"
@@ -518,6 +548,7 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
               <Send className="h-4 w-4 mr-2" />
               {loading ? 'Vérification...' : 
                sentToChefProjet ? 'Déjà envoyé au chef de projet' : 
+               isRejected ? '🔄 Renvoyer au chef de projet (après correction)' : 
                !client.tousEchantillonsPrets ? `⏳ En attente de ${client.totalEchantillonsClient - client.echantillonsEnTraitement} échantillon(s)` :
                'Envoyer au chef de projet'}
             </>

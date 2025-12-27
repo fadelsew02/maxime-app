@@ -4,10 +4,10 @@ Configuration de l'interface d'administration Django
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Client, Echantillon, Essai, Notification, ValidationHistory
-from .models_action_log import ActionLog
-from .models_workflow_data import RapportValidation, EssaiData, PlanificationData
-from .models_archive import RapportArchive
+from .models import (
+    User, Client, Echantillon, Essai, Notification, ValidationHistory,
+    ActionLog, RapportValidation, EssaiData, PlanificationData, RapportArchive
+)
 
 
 @admin.register(User)

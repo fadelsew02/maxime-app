@@ -74,24 +74,24 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # Using SQLite for development (no configuration needed)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# PostgreSQL configuration (commented out for now due to encoding issues)
 # DATABASES = {
 #     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': config('DB_NAME', default='snertp_lab_db'),
-#         'USER': config('DB_USER', default='postgres'),
-#         'PASSWORD': config('DB_PASSWORD', default=''),
-#         'HOST': config('DB_HOST', default='localhost'),
-#         'PORT': config('DB_PORT', default='5432'),
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
+# PostgreSQL configuration (commented out for now due to encoding issues)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('DB_NAME', default='postgres'),
+        'USER': config('DB_USER', default='postgres.xkiutpdhwbmpualhrsgl'),
+        'PASSWORD': config('DB_PASSWORD', default='k2PzR9EMmQ69YCg8'),
+        'HOST': config('DB_HOST', default='aws-1-eu-central-1.pooler.supabase.com'),
+        'PORT': config('DB_PORT', default='6543'),
+    }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

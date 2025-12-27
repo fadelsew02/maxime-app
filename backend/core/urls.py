@@ -10,15 +10,10 @@ from .views import (
     UserViewSet, ClientViewSet, EchantillonViewSet, EssaiViewSet,
     NotificationViewSet, ValidationHistoryViewSet, DashboardViewSet,
     RapportViewSet, PlanificationEssaiViewSet, CapaciteLaboratoireViewSet,
-    RapportMarketingViewSet, WorkflowValidationViewSet
+    RapportMarketingViewSet, WorkflowValidationViewSet, DataStorageViewSet,
+    ActionLogViewSet, RapportValidationViewSet, EssaiDataViewSet, 
+    PlanificationDataViewSet, RapportArchiveViewSet
 )
-from .views_storage import DataStorageViewSet
-from .views_action_log import ActionLogViewSet
-from .views_workflow_data import RapportValidationViewSet, EssaiDataViewSet, PlanificationDataViewSet
-from .views_essais_rejetes import EssaiRejetesViewSet
-from .views_workflows_rejetes import WorkflowRejetesViewSet
-from .views_capacite import CapaciteViewSet
-from .views_archive import RapportArchiveViewSet
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -38,9 +33,6 @@ router.register(r'action-logs', ActionLogViewSet, basename='action-log')
 router.register(r'rapport-validations', RapportValidationViewSet, basename='rapport-validation')
 router.register(r'essai-data', EssaiDataViewSet, basename='essai-data')
 router.register(r'planification-data', PlanificationDataViewSet, basename='planification-data')
-router.register(r'essais-rejetes', EssaiRejetesViewSet, basename='essai-rejetes')
-router.register(r'workflows-rejetes', WorkflowRejetesViewSet, basename='workflow-rejetes')
-router.register(r'capacite-sections', CapaciteViewSet, basename='capacite-sections')
 router.register(r'rapports-archives', RapportArchiveViewSet, basename='rapport-archives')
 
 urlpatterns = [

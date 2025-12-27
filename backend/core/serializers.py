@@ -1,10 +1,6 @@
-"""
-Serializers pour l'API REST
-"""
-
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Client, Echantillon, Essai, Notification, ValidationHistory, Rapport, PlanificationEssai, CapaciteLaboratoire, RapportMarketing, WorkflowValidation
+from .models import Client, ActionLog, WorkflowValidation, DataStorage, EssaiData, PlanificationData, RapportValidation, RapportArchive, Echantillon, Essai, Notification, ValidationHistory, Rapport, PlanificationEssai, CapaciteLaboratoire, RapportMarketing, WorkflowValidation
+from rest_framework import serializers
 
 User = get_user_model()
 
@@ -278,3 +274,97 @@ class WorkflowValidationSerializer(serializers.ModelSerializer):
         model = WorkflowValidation
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ActionLogSerializer(serializers.ModelSerializer):
+    """Serializer pour les logs d'actions"""
+    
+    action_type_display = serializers.CharField(source='get_action_type_display', read_only=True)
+    http_method_display = serializers.CharField(source='get_http_method_display', read_only=True)
+    
+    class Meta:
+        model = ActionLog
+        fields = [
+            'id',
+            'user',
+            'username',
+            'user_role',
+            'action_type',
+            'action_type_display',
+            'action_description',
+            'http_method',
+            'http_method_display',
+            'endpoint',
+            'ip_address',
+            'request_data',
+            'response_status',
+            'echantillon_id',
+            'echantillon_code',
+            'essai_id',
+            'essai_type',
+            'client_id',
+            'client_code',
+            'rapport_id',
+            'workflow_id',
+            'success',
+            'error_message',
+            'duration_ms',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class ActionLogStatsSerializer(serializers.Serializer):
+    """Serializer pour les statistiques des logs"""
+    
+    total_actions = serializers.IntegerField()
+    actions_by_type = serializers.DictField()
+    actions_by_user = serializers.DictField()
+    actions_by_day = serializers.DictField()
+    success_rate = serializers.FloatField()
+    average_duration_ms = serializers.FloatField()
+
+class DataStorageSerializer(serializers.ModelSerializer):
+    """Serializer pour le stockage clé-valeur"""
+    
+    class Meta:
+        model = DataStorage
+        fields = ['id', 'key', 'value', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class RapportValidationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RapportValidation
+        fields = '__all__'
+
+
+class EssaiDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EssaiData
+        fields = '__all__'
+
+
+class PlanificationDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlanificationData
+        fields = '__all__'
+
+
+class WorkflowValidationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkflowValidation
+        fields = '__all__'
+
+
+class RapportArchiveSerializer(serializers.ModelSerializer):
+    envoye_par_nom = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RapportArchive
+        fields = '__all__'
+    
+    def get_envoye_par_nom(self, obj):
+        if obj.envoye_par:
+            return f"{obj.envoye_par.first_name} {obj.envoye_par.last_name}"
+        return "-"

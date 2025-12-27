@@ -13,7 +13,12 @@ from datetime import timedelta
 from django.utils.dateparse import parse_date
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Client, Echantillon, Essai, Notification, ValidationHistory, Rapport, PlanificationEssai, CapaciteLaboratoire, TacheProgrammee, RapportMarketing, WorkflowValidation
+from .models import (
+    Client, Echantillon, Essai, Notification, ValidationHistory, Rapport, 
+    PlanificationEssai, CapaciteLaboratoire, TacheProgrammee, RapportMarketing, 
+    WorkflowValidation, ActionLog, DataStorage, RapportValidation, EssaiData, 
+    PlanificationData, RapportArchive
+)
 from .serializers import (
     UserSerializer, UserCreateSerializer, ClientSerializer,
     EchantillonSerializer, EchantillonListSerializer, EssaiSerializer,
@@ -519,11 +524,9 @@ class EchantillonViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 
-from .views_essais_rejetes import EssaiRejetesViewSet
-from .views_workflows_rejetes import WorkflowRejetesViewSet
 
 # Mixin pour les essais rejetés
-class EssaiViewSet(viewsets.ModelViewSet, EssaiRejetesViewSet):
+class EssaiViewSet(viewsets.ModelViewSet):
     """ViewSet pour les essais"""
     
     queryset = Essai.objects.select_related('echantillon', 'echantillon__client')
@@ -1191,7 +1194,7 @@ class CapaciteLaboratoireViewSet(viewsets.ModelViewSet):
 
 
 # Mixin pour les workflows rejetés
-class WorkflowValidationViewSet(viewsets.ModelViewSet, WorkflowRejetesViewSet):
+class WorkflowValidationViewSet(viewsets.ModelViewSet):
     """ViewSet pour le workflow de validation"""
     
     queryset = WorkflowValidation.objects.select_related('echantillon', 'created_by')
@@ -1413,3 +1416,876 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(rapport)
         return Response(serializer.data)
+"""
+Views pour les logs d'actions
+"""
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Count, Avg, Q
+from django.utils import timezone
+from datetime import timedelta
+from .serializers import ActionLogSerializer, ActionLogStatsSerializer
+
+
+class ActionLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet pour consulter les logs d'actions
+    Lecture seule - les logs sont créés automatiquement par le middleware
+    """
+    
+    queryset = ActionLog.objects.all()
+    serializer_class = ActionLogSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filtrer les logs selon les paramètres de requête"""
+        queryset = ActionLog.objects.all()
+        
+        # Filtrer par utilisateur
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        username = self.request.query_params.get('username')
+        if username:
+            queryset = queryset.filter(username__icontains=username)
+        
+        # Filtrer par type d'action
+        action_type = self.request.query_params.get('action_type')
+        if action_type:
+            queryset = queryset.filter(action_type=action_type)
+        
+        # Filtrer par méthode HTTP
+        http_method = self.request.query_params.get('http_method')
+        if http_method:
+            queryset = queryset.filter(http_method=http_method)
+        
+        # Filtrer par succès/échec
+        success = self.request.query_params.get('success')
+        if success is not None:
+            queryset = queryset.filter(success=success.lower() == 'true')
+        
+        # Filtrer par échantillon
+        echantillon_id = self.request.query_params.get('echantillon_id')
+        if echantillon_id:
+            queryset = queryset.filter(echantillon_id=echantillon_id)
+        
+        echantillon_code = self.request.query_params.get('echantillon_code')
+        if echantillon_code:
+            queryset = queryset.filter(echantillon_code__icontains=echantillon_code)
+        
+        # Filtrer par essai
+        essai_id = self.request.query_params.get('essai_id')
+        if essai_id:
+            queryset = queryset.filter(essai_id=essai_id)
+        
+        # Filtrer par client
+        client_id = self.request.query_params.get('client_id')
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+        
+        # Filtrer par période
+        date_from = self.request.query_params.get('date_from')
+        if date_from:
+            queryset = queryset.filter(created_at__gte=date_from)
+        
+        date_to = self.request.query_params.get('date_to')
+        if date_to:
+            queryset = queryset.filter(created_at__lte=date_to)
+        
+        # Filtrer par période prédéfinie
+        period = self.request.query_params.get('period')
+        if period:
+            now = timezone.now()
+            if period == 'today':
+                queryset = queryset.filter(created_at__date=now.date())
+            elif period == 'week':
+                queryset = queryset.filter(created_at__gte=now - timedelta(days=7))
+            elif period == 'month':
+                queryset = queryset.filter(created_at__gte=now - timedelta(days=30))
+            elif period == 'year':
+                queryset = queryset.filter(created_at__gte=now - timedelta(days=365))
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Obtenir des statistiques sur les logs d'actions"""
+        
+        # Appliquer les mêmes filtres que get_queryset
+        queryset = self.get_queryset()
+        
+        # Total d'actions
+        total_actions = queryset.count()
+        
+        # Actions par type
+        actions_by_type = dict(
+            queryset.values('action_type')
+            .annotate(count=Count('id'))
+            .values_list('action_type', 'count')
+        )
+        
+        # Actions par utilisateur
+        actions_by_user = dict(
+            queryset.values('username')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+            .values_list('username', 'count')
+        )
+        
+        # Actions par jour (derniers 7 jours)
+        now = timezone.now()
+        actions_by_day = {}
+        for i in range(7):
+            day = (now - timedelta(days=i)).date()
+            count = queryset.filter(created_at__date=day).count()
+            actions_by_day[str(day)] = count
+        
+        # Taux de succès
+        success_count = queryset.filter(success=True).count()
+        success_rate = (success_count / total_actions * 100) if total_actions > 0 else 0
+        
+        # Durée moyenne
+        avg_duration = queryset.filter(duration_ms__isnull=False).aggregate(
+            avg=Avg('duration_ms')
+        )['avg'] or 0
+        
+        stats_data = {
+            'total_actions': total_actions,
+            'actions_by_type': actions_by_type,
+            'actions_by_user': actions_by_user,
+            'actions_by_day': actions_by_day,
+            'success_rate': round(success_rate, 2),
+            'average_duration_ms': round(avg_duration, 2),
+        }
+        
+        serializer = ActionLogStatsSerializer(stats_data)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Obtenir les actions récentes (dernières 24h)"""
+        now = timezone.now()
+        yesterday = now - timedelta(days=1)
+        
+        recent_logs = self.get_queryset().filter(created_at__gte=yesterday)[:50]
+        serializer = self.get_serializer(recent_logs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_user(self, request):
+        """Obtenir les actions d'un utilisateur spécifique"""
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response(
+                {'error': 'user_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logs = self.get_queryset().filter(user_id=user_id)[:100]
+        serializer = self.get_serializer(logs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_echantillon(self, request):
+        """Obtenir toutes les actions liées à un échantillon"""
+        echantillon_id = request.query_params.get('echantillon_id')
+        if not echantillon_id:
+            return Response(
+                {'error': 'echantillon_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logs = self.get_queryset().filter(echantillon_id=echantillon_id)
+        serializer = self.get_serializer(logs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def errors(self, request):
+        """Obtenir les actions qui ont échoué"""
+        error_logs = self.get_queryset().filter(success=False)[:100]
+        serializer = self.get_serializer(error_logs, many=True)
+        return Response(serializer.data)
+"""
+Vues pour le stockage des données (remplace localStorage)
+"""
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .serializers import DataStorageSerializer
+
+
+class DataStorageViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer le stockage clé-valeur"""
+    
+    serializer_class = DataStorageSerializer
+    permission_classes = []
+    
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return DataStorage.objects.filter(user=self.request.user)
+        return DataStorage.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        """Créer ou mettre à jour une entrée"""
+        try:
+            if not request.user.is_authenticated:
+                return Response(
+                    {'error': 'Authentification requise'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            key = request.data.get('key')
+            value = request.data.get('value')
+            
+            if not key:
+                return Response(
+                    {'error': 'La clé est requise'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Mettre à jour si existe, créer sinon
+            storage, created = DataStorage.objects.update_or_create(
+                user=request.user,
+                key=key,
+                defaults={'value': value}
+            )
+            
+            serializer = self.get_serializer(storage)
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def retrieve(self, request, pk=None):
+        """Récupérer une valeur par clé"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentification requise'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            storage = DataStorage.objects.get(user=request.user, key=pk)
+            serializer = self.get_serializer(storage)
+            return Response(serializer.data)
+        except DataStorage.DoesNotExist:
+            return Response(
+                {'value': None},
+                status=status.HTTP_200_OK
+            )
+    
+    @action(detail=False, methods=['get'], url_path='(?P<key>[^/.]+)')
+    def get_by_key(self, request, key=None):
+        """Récupérer une valeur par clé (route alternative)"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentification requise'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            storage = DataStorage.objects.get(user=request.user, key=key)
+            return Response({'key': storage.key, 'value': storage.value})
+        except DataStorage.DoesNotExist:
+            return Response({'value': None}, status=status.HTTP_200_OK)
+    
+    def destroy(self, request, pk=None):
+        """Supprimer une entrée par clé"""
+        try:
+            storage = DataStorage.objects.get(user=request.user, key=pk)
+            storage.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except DataStorage.DoesNotExist:
+            return Response(
+                {'error': 'Clé non trouvée'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from .serializers import RapportValidationSerializer, EssaiDataSerializer, PlanificationDataSerializer
+
+
+class RapportValidationViewSet(viewsets.ModelViewSet):
+    queryset = RapportValidation.objects.all()
+    serializer_class = RapportValidationSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def by_etape(self, request):
+        """Récupérer les rapports par étape"""
+        etape = request.query_params.get('etape')
+        status_filter = request.query_params.get('status', 'pending')
+        
+        queryset = self.queryset.filter(etape_actuelle=etape, status=status_filter)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_code(self, request):
+        """Récupérer les rapports par code échantillon"""
+        code = request.query_params.get('code')
+        queryset = self.queryset.filter(code_echantillon=code)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def valider_chef_projet(self, request, pk=None):
+        """Valider par chef de projet"""
+        rapport = self.get_object()
+        rapport.validated_by_chef_projet = True
+        rapport.status = 'accepted'
+        rapport.comment_chef_projet = request.data.get('comment', '')
+        rapport.date_validation_chef_projet = timezone.now()
+        rapport.etape_actuelle = 'chef_service'
+        rapport.save()
+        return Response({'status': 'validated'})
+    
+    @action(detail=True, methods=['post'])
+    def rejeter_chef_projet(self, request, pk=None):
+        """Rejeter par chef de projet"""
+        rapport = self.get_object()
+        rapport.rejected_by_chef_projet = True
+        rapport.status = 'rejected'
+        rapport.comment_chef_projet = request.data.get('comment', '')
+        rapport.date_rejet = timezone.now()
+        rapport.save()
+        return Response({'status': 'rejected'})
+    
+    @action(detail=True, methods=['post'])
+    def valider_chef_service(self, request, pk=None):
+        """Valider par chef de service"""
+        rapport = self.get_object()
+        rapport.validated_by_chef_service = True
+        rapport.status = 'accepted'
+        rapport.comment_chef_service = request.data.get('comment', '')
+        rapport.date_validation_chef_service = timezone.now()
+        rapport.etape_actuelle = 'directeur_technique'
+        rapport.save()
+        return Response({'status': 'validated'})
+    
+    @action(detail=True, methods=['post'])
+    def rejeter_chef_service(self, request, pk=None):
+        """Rejeter par chef de service"""
+        rapport = self.get_object()
+        rapport.rejected_by_chef_service = True
+        rapport.status = 'rejected'
+        rapport.comment_chef_service = request.data.get('comment', '')
+        rapport.date_rejet = timezone.now()
+        rapport.save()
+        return Response({'status': 'rejected'})
+    
+    @action(detail=True, methods=['post'])
+    def valider_directeur_technique(self, request, pk=None):
+        """Valider par directeur technique"""
+        rapport = self.get_object()
+        rapport.validated_by_directeur_technique = True
+        rapport.status = 'accepted'
+        rapport.comment_directeur_technique = request.data.get('comment', '')
+        rapport.date_validation_directeur_technique = timezone.now()
+        rapport.etape_actuelle = 'directeur_snertp'
+        rapport.save()
+        return Response({'status': 'validated'})
+    
+    @action(detail=True, methods=['post'])
+    def rejeter_directeur_technique(self, request, pk=None):
+        """Rejeter par directeur technique"""
+        rapport = self.get_object()
+        rapport.rejected_by_directeur_technique = True
+        rapport.status = 'rejected'
+        rapport.comment_directeur_technique = request.data.get('comment', '')
+        rapport.date_rejet = timezone.now()
+        rapport.save()
+        return Response({'status': 'rejected'})
+    
+    @action(detail=True, methods=['post'])
+    def aviser_directeur_snertp(self, request, pk=None):
+        """Aviser par directeur SNERTP"""
+        rapport = self.get_object()
+        rapport.validated_by_directeur_snertp = True
+        rapport.status = 'accepted'
+        rapport.avis_directeur_snertp = request.data.get('avis', '')
+        rapport.signature_directeur_snertp = request.data.get('signature', '')
+        rapport.date_validation_directeur_snertp = timezone.now()
+        rapport.etape_actuelle = 'marketing'
+        rapport.save()
+        return Response({'status': 'avisé'})
+    
+    @action(detail=True, methods=['post'])
+    def envoyer_client(self, request, pk=None):
+        """Envoyer au client par marketing"""
+        rapport = self.get_object()
+        rapport.processed_by_marketing = True
+        rapport.date_envoi_client = timezone.now()
+        rapport.email_client = request.data.get('email', '')
+        rapport.etape_actuelle = 'client'
+        rapport.save()
+        return Response({'status': 'envoyé'})
+    
+    @action(detail=False, methods=['get'])
+    def rejetes(self, request):
+        """Récupérer tous les rapports rejetés"""
+        queryset = self.queryset.filter(status='rejected')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def valides(self, request):
+        """Récupérer tous les rapports validés"""
+        queryset = self.queryset.filter(
+            validated_by_directeur_technique=True,
+            status='accepted'
+        )
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class EssaiDataViewSet(viewsets.ModelViewSet):
+    queryset = EssaiData.objects.all()
+    serializer_class = EssaiDataSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def by_echantillon(self, request):
+        """Récupérer les essais par code échantillon"""
+        code = request.query_params.get('code')
+        queryset = self.queryset.filter(echantillon_code=code)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_essai_id(self, request):
+        """Récupérer un essai par son ID"""
+        essai_id = request.query_params.get('essai_id')
+        try:
+            essai = self.queryset.get(essai_id=essai_id)
+            serializer = self.get_serializer(essai)
+            return Response(serializer.data)
+        except EssaiData.DoesNotExist:
+            return Response({'error': 'Essai non trouvé'}, status=404)
+    
+    @action(detail=True, methods=['post'])
+    def update_data(self, request, pk=None):
+        """Mettre à jour les données d'un essai"""
+        essai = self.get_object()
+        essai.data.update(request.data.get('data', {}))
+        essai.statut = request.data.get('statut', essai.statut)
+        essai.validation_status = request.data.get('validation_status', essai.validation_status)
+        essai.envoye = request.data.get('envoye', essai.envoye)
+        essai.resultats = request.data.get('resultats', essai.resultats)
+        essai.commentaires = request.data.get('commentaires', essai.commentaires)
+        essai.save()
+        return Response({'status': 'updated'})
+
+
+class PlanificationDataViewSet(viewsets.ModelViewSet):
+    queryset = PlanificationData.objects.all()
+    serializer_class = PlanificationDataSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def by_echantillon(self, request):
+        """Récupérer les planifications par code échantillon"""
+        code = request.query_params.get('code')
+        queryset = self.queryset.filter(echantillon_code=code)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_date(self, request):
+        """Récupérer les planifications par date"""
+        date = request.query_params.get('date')
+        queryset = self.queryset.filter(date_planifiee=date)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def marquer_complete(self, request, pk=None):
+        """Marquer une planification comme complétée"""
+        planification = self.get_object()
+        planification.completed = True
+        planification.statut = 'complete'
+        planification.save()
+        return Response({'status': 'completed'})
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .serializers import RapportArchiveSerializer
+
+
+class RapportArchiveViewSet(viewsets.ModelViewSet):
+    """ViewSet pour l'archivage des rapports"""
+    
+    queryset = RapportArchive.objects.select_related('envoye_par')
+    serializer_class = RapportArchiveSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['etape_envoi', 'code_echantillon', 'envoye_par']
+    search_fields = ['code_echantillon', 'client_name']
+    ordering_fields = ['date_envoi', 'created_at']
+    
+    def get_queryset(self):
+        """Filtrer selon le rôle de l'utilisateur"""
+        user = self.request.user
+        
+        # Chef projet voit ses propres rapports archivés
+        if user.role == 'chef_projet':
+            return self.queryset.filter(envoye_par=user)
+        
+        # Autres rôles voient tous les rapports
+        return self.queryset
+    
+    @action(detail=False, methods=['post'])
+    def archiver_rapport(self, request):
+        """Archiver un rapport lors de l'envoi au chef service"""
+        code_echantillon = request.data.get('code_echantillon')
+        client_name = request.data.get('client_name')
+        file_name = request.data.get('file_name')
+        file_data = request.data.get('file_data')
+        etape_envoi = request.data.get('etape_envoi', 'chef_service')
+        commentaires = request.data.get('commentaires', '')
+        
+        if not all([code_echantillon, client_name, file_name, file_data]):
+            return Response(
+                {'error': 'Données manquantes'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archive = RapportArchive.objects.create(
+            code_echantillon=code_echantillon,
+            client_name=client_name,
+            file_name=file_name,
+            file_data=file_data,
+            etape_envoi=etape_envoi,
+            commentaires=commentaires,
+            envoye_par=request.user
+        )
+        
+        serializer = self.get_serializer(archive)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['get'])
+    def mes_archives(self, request):
+        """Retourne les archives de l'utilisateur connecté"""
+        archives = self.get_queryset().filter(envoye_par=request.user)
+        serializer = self.get_serializer(archives, many=True)
+        return Response(serializer.data)
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+from datetime import timedelta, datetime
+from .models import Echantillon, Essai, CapaciteLaboratoire, Notification
+from .serializers import EchantillonSerializer
+
+class CapaciteViewSet(viewsets.ViewSet):
+    """API pour gérer la capacité des sections"""
+    
+    @action(detail=False, methods=['post'])
+    def verifier_capacite(self, request):
+        """Vérifier si la capacité est disponible pour un envoi"""
+        type_essai = request.data.get('type_essai')
+        date_envoi = request.data.get('date_envoi')
+        
+        if not type_essai or not date_envoi:
+            return Response(
+                {'error': 'Type d\'essai et date d\'envoi requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            date_obj = datetime.strptime(date_envoi, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Récupérer la capacité pour ce type d'essai
+        capacite = CapaciteLaboratoire.objects.filter(type_essai=type_essai).first()
+        
+        if not capacite:
+            return Response({
+                'disponible': True,
+                'message': 'Aucune limite de capacité définie'
+            })
+        
+        # Compter les essais déjà planifiés pour cette date
+        essais_planifies = Essai.objects.filter(
+            type=type_essai,
+            date_reception=date_obj
+        ).count()
+        
+        disponible = essais_planifies < capacite.capacite_quotidienne
+        
+        return Response({
+            'disponible': disponible,
+            'capacite_totale': capacite.capacite_quotidienne,
+            'capacite_utilisee': essais_planifies,
+            'capacite_restante': max(0, capacite.capacite_quotidienne - essais_planifies),
+            'message': 'Capacité disponible' if disponible else 'Capacité atteinte, veuillez patienter.'
+        })
+    
+    @action(detail=False, methods=['post'])
+    def retarder_echantillon(self, request):
+        """Retarder un échantillon et recalculer les dates"""
+        echantillon_id = request.data.get('echantillon_id')
+        nouveau_delai = request.data.get('nouveau_delai', 4)  # jours
+        
+        try:
+            echantillon = Echantillon.objects.get(id=echantillon_id)
+        except Echantillon.DoesNotExist:
+            return Response(
+                {'error': 'Échantillon non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculer la nouvelle date d'envoi
+        nouvelle_date = timezone.now().date() + timedelta(days=nouveau_delai)
+        
+        # Mettre à jour les dates d'envoi selon les types d'essais
+        if 'AG' in (echantillon.essais_types or []):
+            echantillon.date_envoi_ag = nouvelle_date
+        if 'Proctor' in (echantillon.essais_types or []):
+            echantillon.date_envoi_proctor = nouvelle_date
+        if 'CBR' in (echantillon.essais_types or []):
+            echantillon.date_envoi_cbr = nouvelle_date
+        if 'Oedometre' in (echantillon.essais_types or []):
+            echantillon.date_envoi_oedometre = nouvelle_date
+        if 'Cisaillement' in (echantillon.essais_types or []):
+            echantillon.date_envoi_cisaillement = nouvelle_date
+        
+        # Recalculer la date de retour prédite
+        durees = {'AG': 5, 'Proctor': 5, 'CBR': 9, 'Oedometre': 18, 'Cisaillement': 4}
+        duree_max = max([durees.get(essai, 0) for essai in (echantillon.essais_types or [])] or [0])
+        echantillon.date_retour_predite = nouvelle_date + timedelta(days=duree_max + 2)
+        
+        echantillon.save()
+        
+        return Response({
+            'success': True,
+            'nouvelle_date_envoi': nouvelle_date,
+            'nouvelle_date_retour': echantillon.date_retour_predite,
+            'message': f'Échantillon retardé de {nouveau_delai} jours'
+        })
+    
+    @action(detail=False, methods=['post'])
+    def programmer_notification(self, request):
+        """Programmer une notification 1 jour avant l'envoi"""
+        echantillon_id = request.data.get('echantillon_id')
+        
+        try:
+            echantillon = Echantillon.objects.get(id=echantillon_id)
+        except Echantillon.DoesNotExist:
+            return Response(
+                {'error': 'Échantillon non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Programmer les notifications pour chaque type d'essai
+        notifications_creees = []
+        
+        for essai_type in (echantillon.essais_types or []):
+            date_envoi = None
+            if essai_type == 'AG' and echantillon.date_envoi_ag:
+                date_envoi = echantillon.date_envoi_ag
+            elif essai_type == 'Proctor' and echantillon.date_envoi_proctor:
+                date_envoi = echantillon.date_envoi_proctor
+            elif essai_type == 'CBR' and echantillon.date_envoi_cbr:
+                date_envoi = echantillon.date_envoi_cbr
+            elif essai_type == 'Oedometre' and echantillon.date_envoi_oedometre:
+                date_envoi = echantillon.date_envoi_oedometre
+            elif essai_type == 'Cisaillement' and echantillon.date_envoi_cisaillement:
+                date_envoi = echantillon.date_envoi_cisaillement
+            
+            if date_envoi:
+                # Programmer notification 1 jour avant à 8h30
+                date_notification = datetime.combine(
+                    date_envoi - timedelta(days=1),
+                    datetime.min.time().replace(hour=8, minute=30)
+                )
+                
+                # Créer la notification (simplifié - en production utiliser Celery)
+                notification = Notification.objects.create(
+                    user_id=request.user.id,
+                    type='info',
+                    title='Envoi imminent d\'échantillon',
+                    message=f'L\'échantillon {echantillon.code} sera envoyé demain pour essai {essai_type}',
+                    echantillon=echantillon,
+                    module='Stockage'
+                )
+                notifications_creees.append(notification.id)
+        
+        return Response({
+            'success': True,
+            'notifications_creees': len(notifications_creees),
+            'message': 'Notifications programmées avec succès'
+        })
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Q
+from django.utils import timezone
+from .models import Essai
+from .serializers import EssaiSerializer
+
+class EssaiRejetesViewSet(viewsets.ViewSet):
+    """API pour gérer les essais rejetés"""
+    
+    @action(detail=False, methods=['get'])
+    def rejetes(self, request):
+        """Récupérer tous les essais rejetés"""
+        essais_rejetes = Essai.objects.filter(
+            date_rejet__isnull=False
+        ).select_related('echantillon')
+        
+        serializer = EssaiSerializer(essais_rejetes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def rejetes_mecanique(self, request):
+        """Récupérer les essais mécaniques rejetés"""
+        essais_rejetes = Essai.objects.filter(
+            date_rejet__isnull=False,
+            type__in=['Oedometre', 'Cisaillement']
+        ).select_related('echantillon')
+        
+        serializer = EssaiSerializer(essais_rejetes, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['patch'])
+    def corriger(self, request, pk=None):
+        """Corriger un essai rejeté"""
+        try:
+            essai = Essai.objects.get(pk=pk)
+            
+            # Mettre à jour les données
+            essai.statut = request.data.get('statut', essai.statut)
+            essai.date_debut = request.data.get('date_debut', essai.date_debut)
+            essai.date_fin = request.data.get('date_fin', essai.date_fin)
+            essai.operateur = request.data.get('operateur', essai.operateur)
+            essai.resultats = request.data.get('resultats', essai.resultats)
+            essai.commentaires = request.data.get('commentaires', essai.commentaires)
+            
+            # Supprimer le rejet si corrigé et marquer comme prioritaire
+            if request.data.get('date_rejet') is None:
+                essai.date_rejet = None
+                essai.commentaires_validation = None
+                essai.statut_validation = None
+                # Marquer comme prioritaire pour reprise
+                essai.priorite = 'urgente'
+            
+            essai.save()
+            
+            # Mettre à jour l'échantillon pour priorité
+            echantillon = essai.echantillon
+            if echantillon.priorite != 'urgente':
+                echantillon.priorite = 'urgente'
+                echantillon.save()
+            
+            serializer = EssaiSerializer(essai)
+            return Response(serializer.data)
+            
+        except Essai.DoesNotExist:
+            return Response(
+                {'error': 'Essai non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Q
+from django.utils import timezone
+from .models import WorkflowValidation
+from .serializers import WorkflowValidationSerializer
+
+class WorkflowRejetesViewSet(viewsets.ViewSet):
+    """API pour gérer les workflows rejetés"""
+    
+    @action(detail=False, methods=['get'])
+    def chef_projet_rejetes(self, request):
+        """Récupérer les workflows rejetés par le chef de projet"""
+        workflows_rejetes = WorkflowValidation.objects.filter(
+            etape_actuelle='chef_projet',
+            statut='rejected'
+        )
+        
+        data = []
+        for workflow in workflows_rejetes:
+            data.append({
+                'echantillonCode': workflow.code_echantillon,
+                'essaiType': workflow.type_essai or 'Rapport',
+                'chefProjet': workflow.chef_projet or '-',
+                'dateSent': workflow.date_envoi_chef_projet,
+                'dateRejected': workflow.date_rejet_chef_projet,
+                'rejectionReason': workflow.commentaires_rejet or '-',
+                'file': workflow.file_name or '-'
+            })
+        
+        return Response({'results': data})
+    
+    @action(detail=False, methods=['get'])
+    def chef_service_rejetes(self, request):
+        """Récupérer les workflows rejetés par le chef de service"""
+        workflows_rejetes = WorkflowValidation.objects.filter(
+            etape_actuelle='chef_service',
+            statut='rejected'
+        )
+        
+        serializer = WorkflowValidationSerializer(workflows_rejetes, many=True)
+        return Response({'results': serializer.data})
+    
+    @action(detail=True, methods=['patch'])
+    def valider_chef_service(self, request, pk=None):
+        """Valider un workflow par le chef de service"""
+        try:
+            workflow = WorkflowValidation.objects.get(pk=pk)
+            
+            workflow.statut = 'validated'
+            workflow.etape_actuelle = 'directeur_technique'
+            workflow.date_validation_chef_service = timezone.now()
+            workflow.commentaires_chef_service = request.data.get('commentaires', '')
+            
+            workflow.save()
+            
+            serializer = WorkflowValidationSerializer(workflow)
+            return Response(serializer.data)
+            
+        except WorkflowValidation.DoesNotExist:
+            return Response(
+                {'error': 'Workflow non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['patch'])
+    def rejeter_chef_service(self, request, pk=None):
+        """Rejeter un workflow par le chef de service"""
+        try:
+            workflow = WorkflowValidation.objects.get(pk=pk)
+            
+            workflow.statut = 'rejected'
+            workflow.etape_actuelle = 'traitement'
+            workflow.date_rejet_chef_service = timezone.now()
+            workflow.commentaires_rejet = request.data.get('commentaires', '')
+            
+            workflow.save()
+            
+            serializer = WorkflowValidationSerializer(workflow)
+            return Response(serializer.data)
+            
+        except WorkflowValidation.DoesNotExist:
+            return Response(
+                {'error': 'Workflow non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )

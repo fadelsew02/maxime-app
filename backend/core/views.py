@@ -678,6 +678,60 @@ class EssaiViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
+    def accepter(self, request, pk=None):
+        """Accepter un essai et vérifier si tous les essais sont acceptés pour envoyer au traitement"""
+        essai = self.get_object()
+        
+        essai.statut_validation = 'accepted'
+        essai.commentaires_validation = request.data.get('commentaires', '')
+        essai.date_validation = timezone.now().date()
+        essai.save()
+        
+        # Vérifier si tous les essais de l'échantillon sont terminés et acceptés
+        echantillon = essai.echantillon
+        tous_les_essais = echantillon.essais.all()
+        
+        # Compter les essais terminés
+        essais_termines = tous_les_essais.filter(statut='termine')
+        
+        # Vérifier si tous les essais terminés sont acceptés
+        essais_acceptes = essais_termines.filter(statut_validation='accepted')
+        
+        # Si tous les essais sont terminés ET tous acceptés, envoyer au traitement
+        if essais_termines.count() > 0 and essais_termines.count() == essais_acceptes.count():
+            echantillon.statut = 'traitement'
+            echantillon.save()
+            
+            # Créer une notification pour le responsable traitement
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            responsables_traitement = User.objects.filter(
+                role='responsable_traitement',
+                is_active=True
+            )
+            
+            for responsable in responsables_traitement:
+                Notification.objects.create(
+                    user=responsable,
+                    type='success',
+                    title='Nouvel échantillon en traitement',
+                    message=f'L\'échantillon {echantillon.code} a été envoyé au traitement. Tous les essais ont été acceptés.',
+                    module='Validation',
+                    action_required=True,
+                    echantillon=echantillon
+                )
+            
+            return Response({
+                **self.get_serializer(essai).data,
+                'echantillon_envoye_traitement': True,
+                'message': 'Essai accepté. Tous les essais sont acceptés, échantillon envoyé au traitement.'
+            })
+        
+        serializer = self.get_serializer(essai)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
     def retarder(self, request, pk=None):
         """Retarder un essai et programmer son envoi automatique"""
         essai = self.get_object()

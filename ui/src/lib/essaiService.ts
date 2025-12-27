@@ -282,6 +282,26 @@ export const rejeterEssai = async (id: string, commentaires: string): Promise<Es
   return response.json();
 };
 
+// Accepter un essai
+export const accepterEssai = async (id: string, commentaires?: string): Promise<Essai> => {
+  const token = getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/essais/${id}/accepter/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ commentaires: commentaires || '' })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Erreur lors de l\'acceptation de l\'essai');
+  }
+
+  return response.json();
+};
+
 // Récupérer les essais par section
 export const getEssaisBySection = async (section: 'route' | 'mecanique'): Promise<Essai[]> => {
   return getEssais({ section });

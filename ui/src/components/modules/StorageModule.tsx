@@ -33,6 +33,7 @@ export function StorageModule() {
   const [originalEstimatedDateParEssai, setOriginalEstimatedDateParEssai] = useState<Record<string, Date>>({});
   const [essaisEnvoyes, setEssaisEnvoyes] = useState<Record<string, boolean>>({});
   const [essaisAjustesManuel, setEssaisAjustesManuel] = useState<Record<string, boolean>>({});
+  const [loadingButtonStates, setLoadingButtonStates] = useState<Record<string, boolean>>({});
 
   const refreshEchantillons = async () => {
     try {
@@ -283,35 +284,44 @@ export function StorageModule() {
       return;
     }
     
-    // Appliquer le délai UNIQUEMENT à cet essai
-    setDelayDaysParEssai(prev => ({ ...prev, [essaiType]: days }));
-    setEssaisAjustesManuel(prev => ({ ...prev, [essaiType]: true }));
+    // Activer le loader pour ce bouton
+    const buttonKey = `delay_${essaiType}`;
+    setLoadingButtonStates(prev => ({ ...prev, [buttonKey]: true }));
     
-    // Mettre à jour la date pour cet essai
-    if (echantillon) {
-      const originalDate = originalEstimatedDateParEssai[essaiType];
-      if (originalDate) {
-        const delayedDate = new Date(originalDate);
-        delayedDate.setDate(delayedDate.getDate() + days);
-        await handleDateEnvoiEssaiChange(essaiType, delayedDate, true); // skipAutoSend = true
-      }
+    try {
+      // Appliquer le délai UNIQUEMENT à cet essai
+      setDelayDaysParEssai(prev => ({ ...prev, [essaiType]: days }));
+      setEssaisAjustesManuel(prev => ({ ...prev, [essaiType]: true }));
       
-      // Persister dans le backend
-      try {
-        const essais = await getEssaisByEchantillon(echantillon.id);
-        const essai = essais.find(e => e.type === essaiType);
-        if (essai && originalDate) {
+      // Mettre à jour la date pour cet essai
+      if (echantillon) {
+        const originalDate = originalEstimatedDateParEssai[essaiType];
+        if (originalDate) {
           const delayedDate = new Date(originalDate);
           delayedDate.setDate(delayedDate.getDate() + days);
-          await updateEssai(essai.id, {
-            date_reception: format(delayedDate, 'yyyy-MM-dd')
-          });
+          await handleDateEnvoiEssaiChange(essaiType, delayedDate, true); // skipAutoSend = true
         }
-        toast.success(`Date ${essaiType} mise à jour`);
-      } catch (error) {
-        console.error('Erreur sauvegarde:', error);
-        toast.error('Erreur lors de la sauvegarde');
+        
+        // Persister dans le backend
+        try {
+          const essais = await getEssaisByEchantillon(echantillon.id);
+          const essai = essais.find(e => e.type === essaiType);
+          if (essai && originalDate) {
+            const delayedDate = new Date(originalDate);
+            delayedDate.setDate(delayedDate.getDate() + days);
+            await updateEssai(essai.id, {
+              date_reception: format(delayedDate, 'yyyy-MM-dd')
+            });
+          }
+          toast.success(`Date ${essaiType} mise à jour`);
+        } catch (error) {
+          console.error('Erreur sauvegarde:', error);
+          toast.error('Erreur lors de la sauvegarde');
+        }
       }
+    } finally {
+      // Désactiver le loader
+      setLoadingButtonStates(prev => ({ ...prev, [buttonKey]: false }));
     }
   };
 
@@ -342,139 +352,148 @@ export function StorageModule() {
     const ech = echantillons.find(e => e.code === selectedEchantillon);
     if (!ech) return;
 
-    // Utiliser la date d'aujourd'hui si on envoie manuellement (accéléré)
-    const today = new Date();
-    const dateEnvoiStr = format(today, 'yyyy-MM-dd');
-
-    // Vérifier la capacité du laboratoire pour ce type d'essai à cette date
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/capacites/check/?type_essai=${essaiType}&date=${dateEnvoiStr}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const capaciteData = await response.json();
-        if (!capaciteData.disponible) {
-          toast.error('Capacité atteinte', {
-            description: `Le laboratoire a atteint sa capacité pour ${essaiType} le ${formatDateFr(dateEnvoiStr)}. Veuillez choisir une autre date.`,
-          });
-          return;
-        }
-      }
-    } catch (error) {
-      console.warn('Impossible de vérifier la capacité, envoi autorisé:', error);
-    }
+    // Activer le loader
+    const buttonKey = `send_${essaiType}`;
+    setLoadingButtonStates(prev => ({ ...prev, [buttonKey]: true }));
 
     try {
-      // Récupérer les essais de l'échantillon depuis l'API
-      const essais = await getEssaisByEchantillon(ech.id);
-      
-      // Trouver l'essai correspondant au type
-      const essai = essais.find(e => e.type === essaiType);
-      
-      if (essai) {
-        // Mettre à jour la date_reception de l'essai via l'API avec la date d'aujourd'hui
-        await updateEssai(essai.id, {
-          date_reception: dateEnvoiStr
+      // Utiliser la date d'aujourd'hui si on envoie manuellement (accéléré)
+      const today = new Date();
+      const dateEnvoiStr = format(today, 'yyyy-MM-dd');
+
+      // Vérifier la capacité du laboratoire pour ce type d'essai à cette date
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/capacites/check/?type_essai=${essaiType}&date=${dateEnvoiStr}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json',
+          },
         });
         
-        if (!skipNotification) {
-          toast.success(`Essai ${essaiType} envoyé`, {
-            description: `Date d'envoi: ${formatDateFr(dateEnvoiStr)}`,
-          });
+        if (response.ok) {
+          const capaciteData = await response.json();
+          if (!capaciteData.disponible) {
+            toast.error('Capacité atteinte', {
+              description: `Le laboratoire a atteint sa capacité pour ${essaiType} le ${formatDateFr(dateEnvoiStr)}. Veuillez choisir une autre date.`,
+            });
+            return;
+          }
         }
-      } else {
-        toast.error(`Essai ${essaiType} non trouvé`);
+      } catch (error) {
+        console.warn('Impossible de vérifier la capacité, envoi autorisé:', error);
+      }
+
+      try {
+        // Récupérer les essais de l'échantillon depuis l'API
+        const essais = await getEssaisByEchantillon(ech.id);
+        
+        // Trouver l'essai correspondant au type
+        const essai = essais.find(e => e.type === essaiType);
+        
+        if (essai) {
+          // Mettre à jour la date_reception de l'essai via l'API avec la date d'aujourd'hui
+          await updateEssai(essai.id, {
+            date_reception: dateEnvoiStr
+          });
+          
+          if (!skipNotification) {
+            toast.success(`Essai ${essaiType} envoyé`, {
+              description: `Date d'envoi: ${formatDateFr(dateEnvoiStr)}`,
+            });
+          }
+        } else {
+          toast.error(`Essai ${essaiType} non trouvé`);
+          return;
+        }
+
+        // Mettre à jour la priorité de l'échantillon si nécessaire
+        if (priorite !== ech.priorite) {
+          await updateAPIEchantillon(ech.id, { priorite });
+        }
+      } catch (error) {
+        console.error('Erreur lors de la planification:', error);
+        toast.error('Erreur lors de la planification de l\'essai');
         return;
       }
 
-      // Mettre à jour la priorité de l'échantillon si nécessaire
-      if (priorite !== ech.priorite) {
-        await updateAPIEchantillon(ech.id, { priorite });
-      }
-    } catch (error) {
-      console.error('Erreur lors de la planification:', error);
-      toast.error('Erreur lors de la planification de l\'essai');
-      return;
-    }
+      // Vérifier si tous les essais ont été envoyés (incluant celui qu'on vient d'envoyer)
+      const cle = `${ech.code}_${essaiType}`;
+      const essaisEnvoyesMisAJour = { ...essaisEnvoyes, [cle]: true };
+      
+      // Mettre à jour l'état immédiatement
+      setEssaisEnvoyes(essaisEnvoyesMisAJour);
+      
+      const tousEssaisEnvoyes = ech.essais.every(essai => essaisEnvoyesMisAJour[`${ech.code}_${essai}`]);
 
-    // Vérifier si tous les essais ont été envoyés (incluant celui qu'on vient d'envoyer)
-    const cle = `${ech.code}_${essaiType}`;
-    const essaisEnvoyesMisAJour = { ...essaisEnvoyes, [cle]: true };
-    
-    // Mettre à jour l'état immédiatement
-    setEssaisEnvoyes(essaisEnvoyesMisAJour);
-    
-    const tousEssaisEnvoyes = ech.essais.every(essai => essaisEnvoyesMisAJour[`${ech.code}_${essai}`]);
+      if (tousEssaisEnvoyes) {
+        try {
+          // Changer le statut à 'essais' seulement quand TOUS les essais sont envoyés
+          await changeEchantillonStatut(ech.id, 'essais');
+          
+          toast.success(`Échantillon ${selectedEchantillon} envoyé`, {
+            description: 'Tous les essais ont été planifiés',
+          });
 
-    if (tousEssaisEnvoyes) {
-      try {
-        // Changer le statut à 'essais' seulement quand TOUS les essais sont envoyés
-        await changeEchantillonStatut(ech.id, 'essais');
-        
-        toast.success(`Échantillon ${selectedEchantillon} envoyé`, {
-          description: 'Tous les essais ont été planifiés',
-        });
+          // Notifications pour les opérateurs de labo
+          addNotification({
+            type: 'info',
+            title: 'Nouvel échantillon en attente',
+            message: `L'échantillon ${selectedEchantillon} a été envoyé aux laboratoires pour les essais: ${ech.essais.join(', ')}`,
+            userRole: 'operateur_route',
+            module: 'Stockage',
+            actionRequired: true,
+          });
 
-        // Notifications pour les opérateurs de labo
+          addNotification({
+            type: 'info',
+            title: 'Nouvel échantillon en attente',
+            message: `L'échantillon ${selectedEchantillon} a été envoyé aux laboratoires pour les essais: ${ech.essais.join(', ')}`,
+            userRole: 'operateur_mecanique',
+            module: 'Stockage',
+            actionRequired: true,
+          });
+
+          // Notification pour le responsable matériaux
+          addNotification({
+            type: 'success',
+            title: 'Échantillon envoyé aux labos',
+            message: `L'échantillon ${selectedEchantillon} (${ech.essais.join(', ')}) a été envoyé aux laboratoires`,
+            userRole: 'responsable_materiaux',
+            module: 'Stockage',
+          });
+
+          // Mettre à jour localement la liste des échantillons
+          setEchantillons(prev => prev.filter(e => e.id !== ech.id));
+
+          // Reset seulement quand tous les essais sont envoyés
+          setSelectedEchantillon(null);
+          setDateEnvoiParEssai({});
+          setSectionsSelectionnees([]);
+          setPriorite('normale');
+          setDateRetourEstimeeParEssai({});
+          setEssaisEnvoyes({});
+        } catch (error) {
+          console.error('Erreur changement statut:', error);
+          toast.error('Erreur lors du changement de statut');
+        }
+      } else {
+        // Ne pas désélectionner l'échantillon, garder le panneau ouvert
+        // Notification pour l'essai spécifique
+        const section = ['AG', 'Proctor', 'CBR'].includes(essaiType) ? 'Route' : 'Mécanique';
+        const operateurRole = ['AG', 'Proctor', 'CBR'].includes(essaiType) ? 'operateur_route' : 'operateur_mecanique';
+
         addNotification({
           type: 'info',
-          title: 'Nouvel échantillon en attente',
-          message: `L'échantillon ${selectedEchantillon} a été envoyé aux laboratoires pour les essais: ${ech.essais.join(', ')}`,
-          userRole: 'operateur_route',
+          title: `Nouvel essai ${essaiType} planifié`,
+          message: `L'essai ${essaiType} pour l'échantillon ${selectedEchantillon} est planifié pour le ${formatDateFr(dateEnvoiStr)}`,
+          userRole: operateurRole,
           module: 'Stockage',
           actionRequired: true,
         });
-
-        addNotification({
-          type: 'info',
-          title: 'Nouvel échantillon en attente',
-          message: `L'échantillon ${selectedEchantillon} a été envoyé aux laboratoires pour les essais: ${ech.essais.join(', ')}`,
-          userRole: 'operateur_mecanique',
-          module: 'Stockage',
-          actionRequired: true,
-        });
-
-        // Notification pour le responsable matériaux
-        addNotification({
-          type: 'success',
-          title: 'Échantillon envoyé aux labos',
-          message: `L'échantillon ${selectedEchantillon} (${ech.essais.join(', ')}) a été envoyé aux laboratoires`,
-          userRole: 'responsable_materiaux',
-          module: 'Stockage',
-        });
-
-        // Mettre à jour localement la liste des échantillons
-        setEchantillons(prev => prev.filter(e => e.id !== ech.id));
-
-        // Reset seulement quand tous les essais sont envoyés
-        setSelectedEchantillon(null);
-        setDateEnvoiParEssai({});
-        setSectionsSelectionnees([]);
-        setPriorite('normale');
-        setDateRetourEstimeeParEssai({});
-        setEssaisEnvoyes({});
-      } catch (error) {
-        console.error('Erreur changement statut:', error);
-        toast.error('Erreur lors du changement de statut');
       }
-    } else {
-      // Ne pas désélectionner l'échantillon, garder le panneau ouvert
-      // Notification pour l'essai spécifique
-      const section = ['AG', 'Proctor', 'CBR'].includes(essaiType) ? 'Route' : 'Mécanique';
-      const operateurRole = ['AG', 'Proctor', 'CBR'].includes(essaiType) ? 'operateur_route' : 'operateur_mecanique';
-
-      addNotification({
-        type: 'info',
-        title: `Nouvel essai ${essaiType} planifié`,
-        message: `L'essai ${essaiType} pour l'échantillon ${selectedEchantillon} est planifié pour le ${formatDateFr(dateEnvoiStr)}`,
-        userRole: operateurRole,
-        module: 'Stockage',
-        actionRequired: true,
-      });
+    } finally {
+      // Désactiver le loader
+      setLoadingButtonStates(prev => ({ ...prev, [buttonKey]: false }));
     }
   };
 
@@ -692,6 +711,7 @@ export function StorageModule() {
                               mode="single"
                               selected={dateEnvoiParEssai[essaiType]}
                               onSelect={(date?: Date) => handleDateEnvoiEssaiChange(essaiType, date)}
+                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                               initialFocus
                             />
                           </PopoverContent>
@@ -708,9 +728,14 @@ export function StorageModule() {
                               const currentDelay = delayDaysParEssai[essaiType] || 0;
                               handleDelayEssaiChange(essaiType, currentDelay - 1);
                             }}
+                            disabled={loadingButtonStates[`delay_${essaiType}`]}
                             className="flex-1"
                           >
-                            ⚡ Accélérer
+                            {loadingButtonStates[`delay_${essaiType}`] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              '⚡ Accélérer'
+                            )}
                           </Button>
                           <span className="text-sm font-semibold px-2">
                             {delayDaysParEssai[essaiType] === 0 || !delayDaysParEssai[essaiType] 
@@ -726,9 +751,14 @@ export function StorageModule() {
                               const currentDelay = delayDaysParEssai[essaiType] || 0;
                               handleDelayEssaiChange(essaiType, currentDelay + 1);
                             }}
+                            disabled={loadingButtonStates[`delay_${essaiType}`]}
                             className="flex-1"
                           >
-                            🕐 Retarder
+                            {loadingButtonStates[`delay_${essaiType}`] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              '🕐 Retarder'
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -753,6 +783,7 @@ export function StorageModule() {
                         
                         const isToday = selectedDate.getTime() === today.getTime();
                         const isPast = selectedDate < today;
+                        const isLoading = loadingButtonStates[`send_${essaiType}`];
                         
                         // Le bouton "Envoyer maintenant" apparaît UNIQUEMENT si :
                         // - La date est aujourd'hui OU dans le passé
@@ -761,10 +792,20 @@ export function StorageModule() {
                             <Button
                               className="w-full"
                               onClick={() => handleEnvoiEssai(essaiType)}
+                              disabled={isLoading}
                               style={{ backgroundColor: '#28A745' }}
                             >
-                              <Send className="h-4 w-4 mr-2" />
-                              ⚡ Envoyer maintenant {essaiType}
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Envoi en cours...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="h-4 w-4 mr-2" />
+                                  ⚡ Envoyer maintenant {essaiType}
+                                </>
+                              )}
                             </Button>
                           );
                         }

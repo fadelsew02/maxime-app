@@ -11,7 +11,7 @@ capacites_data = [
     {
         'type_essai': 'AG',
         'capacite_quotidienne': 6,
-        'capacite_simultanee': 7,
+        'capacite_simultanee': 5,
         'duree_standard_jours': 5
     },
     {

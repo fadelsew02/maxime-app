@@ -609,7 +609,10 @@ class EssaiViewSet(viewsets.ModelViewSet):
         
         essai = self.get_object()
         
-        if essai.statut not in ['en_cours', 'attente']:
+        # Permettre de re-terminer un essai rejeté
+        est_rejete = essai.statut_validation == 'rejected'
+        
+        if essai.statut not in ['en_cours', 'attente', 'termine'] or (essai.statut == 'termine' and not est_rejete):
             return Response(
                 {'error': 'Cet essai n\'est pas en cours ou en attente'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -617,6 +620,11 @@ class EssaiViewSet(viewsets.ModelViewSet):
         
         essai.statut = 'termine'
         essai.date_fin = request.data.get('date_fin', timezone.now().date())
+        
+        # Si l'essai était rejeté, réinitialiser les champs de rejet
+        if est_rejete:
+            essai.date_rejet = None
+            essai.was_resumed = True  # Marquer comme repris
         
         # Gérer les résultats (peut être JSON string ou dict)
         resultats = request.data.get('resultats', '{}')

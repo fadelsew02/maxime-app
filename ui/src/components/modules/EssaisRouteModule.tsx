@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Upload, CheckCircle, CalendarIcon, Send } from 'lucide-react';
+import { Upload, CheckCircle, CalendarIcon, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEssaisBySection, updateEssai, updateEchantillon, EssaiTest, getEssaisByEchantillon } from '../../lib/mockData';
 import { getEchantillons, Echantillon as APIEchantillon, updateEchantillon as updateEchantillonAPI } from '../../lib/echantillonService';
@@ -460,6 +460,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
     fichierFile: null,
   });
   const [envoye, setEnvoye] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
     const loadEssai = async () => {
@@ -896,6 +897,8 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                 return;
               }
               
+              setIsSubmitting(true);
+              
               try {
                 const resultats = getResultats();
                 
@@ -931,12 +934,24 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
               } catch (error) {
                 console.error('Erreur:', error);
                 toast.error('Erreur lors de l\'envoi');
+              } finally {
+                setIsSubmitting(false);
               }
             }}
+            disabled={isSubmitting}
             style={{ backgroundColor: isRejete ? '#FD7E14' : '#28A745' }}
           >
-            <Send className="h-4 w-4 mr-2" />
-            {isRejete ? '🔄 Renvoyer pour validation' : 'Envoyer pour décodification'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Envoi en cours...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                {isRejete ? '🔄 Renvoyer pour validation' : 'Envoyer pour décodification'}
+              </>
+            )}
           </Button>
         )}
         

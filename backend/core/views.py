@@ -370,13 +370,25 @@ class EchantillonViewSet(viewsets.ModelViewSet):
             print(f"\n📦 {echantillon.code}:")
             client_key = str(echantillon.client.id) if echantillon.client else 'sans_client'
             client_nom = echantillon.client_nom or 'Client inconnu'
+            client_id = echantillon.client.id if echantillon.client else None
+            
             if client_key not in clients_data:
+                # Compter le nombre total d'échantillons du client (tous statuts confondus)
+                total_echantillons_client = 0
+                if client_id:
+                    total_echantillons_client = Echantillon.objects.filter(client_id=client_id).count()
+                
                 clients_data[client_key] = {
                     'clientNom': client_nom,
                     'chefProjet': echantillon.chef_projet or '-',
                     'echantillons': [],
-                    'totalEssais': 0
+                    'totalEssais': 0,
+                    'totalEchantillonsClient': total_echantillons_client,
+                    'echantillonsEnTraitement': 0
                 }
+            
+            # Incrémenter le compteur d'échantillons en traitement
+            clients_data[client_key]['echantillonsEnTraitement'] += 1
             
             # Récupérer uniquement les essais acceptés
             essais_acceptes = echantillon.essais.filter(statut='termine', statut_validation='accepted')
@@ -425,6 +437,12 @@ class EchantillonViewSet(viewsets.ModelViewSet):
                     'essais': essais_list
                 })
                 clients_data[client_key]['totalEssais'] += len(essais_list)
+        
+        # Ajouter un flag pour savoir si tous les échantillons sont prêts
+        for client_data in clients_data.values():
+            client_data['tousEchantillonsPrets'] = (
+                client_data['echantillonsEnTraitement'] == client_data['totalEchantillonsClient']
+            )
         
         return Response(list(clients_data.values()))
     

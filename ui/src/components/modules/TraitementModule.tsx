@@ -38,6 +38,9 @@ interface ClientGroupe {
   chefProjet: string;
   echantillons: EchantillonGroupe[];
   totalEssais: number;
+  totalEchantillonsClient: number;
+  echantillonsEnTraitement: number;
+  tousEchantillonsPrets: boolean;
 }
 
 function ClientCard({ client, onSelect }: { client: ClientGroupe; onSelect: (client: ClientGroupe) => void }) {
@@ -84,6 +87,16 @@ function ClientCard({ client, onSelect }: { client: ClientGroupe; onSelect: (cli
             <Badge variant="outline" style={{ borderColor: '#28A745', color: '#28A745' }}>
               {client.echantillons.length} échantillon(s)
             </Badge>
+            {!client.tousEchantillonsPrets && (
+              <Badge style={{ backgroundColor: '#FFC107', color: '#000' }}>
+                ⏳ {client.echantillonsEnTraitement}/{client.totalEchantillonsClient} prêts
+              </Badge>
+            )}
+            {client.tousEchantillonsPrets && (
+              <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}>
+                ✓ Tous prêts
+              </Badge>
+            )}
           </div>
           <div className="text-sm space-y-1 mb-3" style={{ color: '#6C757D' }}>
             <div className="flex items-center gap-2">
@@ -94,6 +107,11 @@ function ClientCard({ client, onSelect }: { client: ClientGroupe; onSelect: (cli
                 </Badge>
               )}
             </div>
+            {!client.tousEchantillonsPrets && (
+              <p className="text-xs" style={{ color: '#FD7E14' }}>
+                ⚠️ En attente de {client.totalEchantillonsClient - client.echantillonsEnTraitement} échantillon(s) supplémentaire(s)
+              </p>
+            )}
             {isRejected ? (
               <Badge style={{ backgroundColor: '#DC3545', color: '#FFFFFF' }}>
                 Rejeté
@@ -469,16 +487,30 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
 
         <Button
           onClick={handleSendToChefProjet}
-          disabled={!traitementFile || sentToChefProjet || loading}
+          disabled={!traitementFile || sentToChefProjet || loading || !client.tousEchantillonsPrets}
           style={{ 
-            backgroundColor: sentToChefProjet ? '#6C757D' : '#003366',
+            backgroundColor: sentToChefProjet ? '#6C757D' : (!client.tousEchantillonsPrets ? '#FFC107' : '#003366'),
             color: '#FFFFFF'
           }}
           className="w-full"
         >
           <Send className="h-4 w-4 mr-2" />
-          {loading ? 'Vérification...' : sentToChefProjet ? 'Déjà envoyé au chef de projet' : 'Envoyer au chef de projet'}
+          {loading ? 'Vérification...' : 
+           sentToChefProjet ? 'Déjà envoyé au chef de projet' : 
+           !client.tousEchantillonsPrets ? `⏳ En attente de ${client.totalEchantillonsClient - client.echantillonsEnTraitement} échantillon(s)` :
+           'Envoyer au chef de projet'}
         </Button>
+
+        {!client.tousEchantillonsPrets && !sentToChefProjet && (
+          <div className="p-3 rounded-lg" style={{ backgroundColor: '#FFF3CD', border: '1px solid #FFC107' }}>
+            <p className="text-sm" style={{ color: '#856404' }}>
+              ⚠️ <strong>Envoi bloqué :</strong> Tous les échantillons du client doivent être en traitement avant l'envoi.
+            </p>
+            <p className="text-xs mt-1" style={{ color: '#856404' }}>
+              Actuellement : {client.echantillonsEnTraitement}/{client.totalEchantillonsClient} échantillons prêts
+            </p>
+          </div>
+        )}
 
         {sentToChefProjet && !loading && (
           <div className="space-y-2">

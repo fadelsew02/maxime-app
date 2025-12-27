@@ -331,9 +331,11 @@ class EchantillonViewSet(viewsets.ModelViewSet):
     def traitement_groupes_par_client(self, request):
         """Retourne les échantillons en traitement groupés par client avec flag estRepris"""
         echantillons = self.get_queryset().filter(statut='traitement').select_related('client').prefetch_related('essais')
+        print(f"\n🔍 TRAITEMENT: {echantillons.count()} échantillons avec statut='traitement'")
         
         clients_data = {}
         for echantillon in echantillons:
+            print(f"\n📦 {echantillon.code}:")
             client_key = str(echantillon.client.id) if echantillon.client else 'sans_client'
             client_nom = echantillon.client_nom or 'Client inconnu'
             if client_key not in clients_data:
@@ -344,14 +346,26 @@ class EchantillonViewSet(viewsets.ModelViewSet):
                     'totalEssais': 0
                 }
             
-            # Récupérer les essais acceptés
+            # Récupérer uniquement les essais acceptés
             essais_acceptes = echantillon.essais.filter(statut='termine', statut_validation='accepted')
+            total_essais = echantillon.essais.count()
+            print(f"  - Total essais: {total_essais}")
+            print(f"  - Essais acceptés: {essais_acceptes.count()}")
+            for e in echantillon.essais.all():
+                print(f"    • {e.type}: statut={e.statut}, validation={e.statut_validation}")
+            
+            # Vérifier que TOUS les essais sont acceptés
+            if essais_acceptes.count() != total_essais:
+                print(f"  ❌ Ignoré: tous les essais ne sont pas acceptés")
+                continue
             
             # Garder seulement le dernier essai de chaque type
             essais_uniques = {}
             for essai in essais_acceptes:
                 if essai.type not in essais_uniques or essai.date_fin > essais_uniques[essai.type].date_fin:
                     essais_uniques[essai.type] = essai
+            
+            print(f"  - Essais uniques retenus: {len(essais_uniques)}")
             
             essais_list = []
             for essai in essais_uniques.values():

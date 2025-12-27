@@ -89,7 +89,7 @@ class CanManageEchantillons(permissions.BasePermission):
             return True
         
         # Les réceptionnistes peuvent modifier en phase de stockage et envoyer au traitement
-        if request.user.role == 'receptionniste' and obj.statut in ['attente', 'stockage', 'decodification']:
+        if request.user.role == 'receptionniste' and obj.statut in ['attente', 'stockage', 'decodification', 'traitement']:
             return True
         
         # Les responsables matériaux peuvent modifier en stockage

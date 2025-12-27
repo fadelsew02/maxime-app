@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
-import { FileText, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { workflowApi } from '../../lib/workflowApi';
 
@@ -357,6 +357,7 @@ function ValidationSection({ echantillon, onClose }: { echantillon: EchantillonR
   const [comment, setComment] = useState('');
   const [validated, setValidated] = useState(false);
   const [isAccepted, setIsAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const checkValidationStatus = async () => {
@@ -370,17 +371,22 @@ function ValidationSection({ echantillon, onClose }: { echantillon: EchantillonR
   }, [echantillon.code]);
 
   const handleAccept = async () => {
-    const workflow = await workflowApi.getByCode(echantillon.code);
-    if (workflow?.id) {
-      const success = await workflowApi.validerChefService(workflow.id, comment);
-      if (success) {
-        setValidated(true);
-        setIsAccepted(true);
-        toast.success('Rapport accepté et envoyé au Directeur Technique');
-        setTimeout(() => onClose(), 1000);
-      } else {
-        toast.error('Erreur lors de la validation');
+    setIsSubmitting(true);
+    try {
+      const workflow = await workflowApi.getByCode(echantillon.code);
+      if (workflow?.id) {
+        const success = await workflowApi.validerChefService(workflow.id, comment);
+        if (success) {
+          setValidated(true);
+          setIsAccepted(true);
+          toast.success('Rapport accepté et envoyé au Directeur Technique');
+          setTimeout(() => onClose(), 1000);
+        } else {
+          toast.error('Erreur lors de la validation');
+        }
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -390,16 +396,21 @@ function ValidationSection({ echantillon, onClose }: { echantillon: EchantillonR
       return;
     }
 
-    const workflow = await workflowApi.getByCode(echantillon.code);
-    if (workflow?.id) {
-      const success = await workflowApi.rejeterChefService(workflow.id, comment);
-      if (success) {
-        setValidated(true);
-        toast.success('Rapport rejeté et renvoyé au responsable traitement');
-        setTimeout(() => onClose(), 1000);
-      } else {
-        toast.error('Erreur lors du rejet');
+    setIsSubmitting(true);
+    try {
+      const workflow = await workflowApi.getByCode(echantillon.code);
+      if (workflow?.id) {
+        const success = await workflowApi.rejeterChefService(workflow.id, comment);
+        if (success) {
+          setValidated(true);
+          toast.success('Rapport rejeté et renvoyé au responsable traitement');
+          setTimeout(() => onClose(), 1000);
+        } else {
+          toast.error('Erreur lors du rejet');
+        }
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -433,27 +444,45 @@ function ValidationSection({ echantillon, onClose }: { echantillon: EchantillonR
           <div className="flex gap-2">
             <Button
               onClick={handleAccept}
-              disabled={validated}
+              disabled={validated || isSubmitting}
               style={{ 
                 backgroundColor: validated ? '#6C757D' : '#28A745', 
                 color: '#FFFFFF',
                 opacity: validated ? 0.5 : 1
               }}
             >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Accepter le rapport
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Traitement...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Accepter le rapport
+                </>
+              )}
             </Button>
             <Button
               onClick={handleReject}
-              disabled={validated}
+              disabled={validated || isSubmitting}
               style={{ 
                 backgroundColor: validated ? '#6C757D' : '#DC3545', 
                 color: '#FFFFFF',
                 opacity: validated ? 0.5 : 1
               }}
             >
-              <XCircle className="h-4 w-4 mr-2" />
-              Rejeter le rapport
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Traitement...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Rejeter le rapport
+                </>
+              )}
             </Button>
           </div>
         </>

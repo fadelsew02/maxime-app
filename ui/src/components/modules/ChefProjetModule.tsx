@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { FileText, Download, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '../ui/textarea';
 import { workflowApi } from '../../lib/workflowApi';
@@ -544,8 +544,17 @@ function ClientValidation({ client, onClose }: { client: ClientGroupe; onClose: 
             opacity: validated ? 0.5 : 1
           }}
         >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          {loading ? 'Traitement...' : 'Accepter tous les rapports'}
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Traitement...
+            </>
+          ) : (
+            <>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter tous les rapports
+            </>
+          )}
         </Button>
         <Button
           onClick={handleRejectAll}
@@ -556,8 +565,17 @@ function ClientValidation({ client, onClose }: { client: ClientGroupe; onClose: 
             opacity: validated ? 0.5 : 1
           }}
         >
-          <XCircle className="h-4 w-4 mr-2" />
-          {loading ? 'Traitement...' : 'Rejeter tous les rapports'}
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Traitement...
+            </>
+          ) : (
+            <>
+              <XCircle className="h-4 w-4 mr-2" />
+              Rejeter tous les rapports
+            </>
+          )}
         </Button>
       </div>
     </div>

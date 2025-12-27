@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { FileText, Upload, Send, CheckCircle } from 'lucide-react';
+import { FileText, Upload, Send, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { workflowApi } from '../../lib/workflowApi';
 import { EchantillonDetails } from './TraitementModule_components';
@@ -299,6 +299,7 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
   const [sentToChefProjet, setSentToChefProjet] = useState(false);
   const [selectedEchantillon, setSelectedEchantillon] = useState<EchantillonGroupe | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const checkIfAlreadySent = async () => {
@@ -333,52 +334,64 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64Data = e.target?.result as string;
 
-        for (const echantillon of client.echantillons) {
-          const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${echantillon.code}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        try {
+          for (const echantillon of client.echantillons) {
+            const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${echantillon.code}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+              }
+            });
+            const echantillonData = await echantillonResponse.json();
+            const echantillonObj = echantillonData.results[0];
+            const echantillonId = echantillonObj?.id;
+
+            if (!echantillonId) {
+              toast.error(`Échantillon ${echantillon.code} introuvable`);
+              setIsSubmitting(false);
+              return;
             }
-          });
-          const echantillonData = await echantillonResponse.json();
-          const echantillonObj = echantillonData.results[0];
-          const echantillonId = echantillonObj?.id;
 
-          if (!echantillonId) {
-            toast.error(`Échantillon ${echantillon.code} introuvable`);
-            return;
+            const workflow = await workflowApi.create({
+              echantillon: echantillonId,
+              code_echantillon: echantillon.code,
+              client_name: client.clientNom,
+              etape_actuelle: 'chef_projet',
+              statut: 'en_attente',
+              file_data: base64Data,
+              file_name: traitementFile.name,
+              observations_traitement: observations
+            });
+
+            if (!workflow) {
+              toast.error(`Erreur lors de l'envoi de ${echantillon.code}`);
+              setIsSubmitting(false);
+              return;
+            }
           }
 
-          const workflow = await workflowApi.create({
-            echantillon: echantillonId,
-            code_echantillon: echantillon.code,
-            client_name: client.clientNom,
-            etape_actuelle: 'chef_projet',
-            statut: 'en_attente',
-            file_data: base64Data,
-            file_name: traitementFile.name,
-            observations_traitement: observations
-          });
-
-          if (!workflow) {
-            toast.error(`Erreur lors de l'envoi de ${echantillon.code}`);
-            return;
-          }
+          setSentToChefProjet(true);
+          toast.success(`Rapport envoyé au chef de projet pour ${client.echantillons.length} échantillon(s)`);
+          onClose();
+          onSent(); // Ceci va recharger la liste et mettre à jour les badges
+        } catch (error) {
+          console.error('Erreur:', error);
+          toast.error('Erreur de connexion au serveur');
+        } finally {
+          setIsSubmitting(false);
         }
-
-        setSentToChefProjet(true);
-        toast.success(`Rapport envoyé au chef de projet pour ${client.echantillons.length} échantillon(s)`);
-        onClose();
-        onSent(); // Ceci va recharger la liste et mettre à jour les badges
       };
       reader.readAsDataURL(traitementFile);
     } catch (error) {
       console.error('Erreur:', error);
       toast.error('Erreur de connexion au serveur');
+      setIsSubmitting(false);
     }
   };
 
@@ -487,18 +500,27 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
 
         <Button
           onClick={handleSendToChefProjet}
-          disabled={!traitementFile || sentToChefProjet || loading || !client.tousEchantillonsPrets}
+          disabled={!traitementFile || sentToChefProjet || loading || !client.tousEchantillonsPrets || isSubmitting}
           style={{ 
             backgroundColor: sentToChefProjet ? '#6C757D' : (!client.tousEchantillonsPrets ? '#FFC107' : '#003366'),
             color: '#FFFFFF'
           }}
           className="w-full"
         >
-          <Send className="h-4 w-4 mr-2" />
-          {loading ? 'Vérification...' : 
-           sentToChefProjet ? 'Déjà envoyé au chef de projet' : 
-           !client.tousEchantillonsPrets ? `⏳ En attente de ${client.totalEchantillonsClient - client.echantillonsEnTraitement} échantillon(s)` :
-           'Envoyer au chef de projet'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Envoi en cours...
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4 mr-2" />
+              {loading ? 'Vérification...' : 
+               sentToChefProjet ? 'Déjà envoyé au chef de projet' : 
+               !client.tousEchantillonsPrets ? `⏳ En attente de ${client.totalEchantillonsClient - client.echantillonsEnTraitement} échantillon(s)` :
+               'Envoyer au chef de projet'}
+            </>
+          )}
         </Button>
 
         {!client.tousEchantillonsPrets && !sentToChefProjet && (

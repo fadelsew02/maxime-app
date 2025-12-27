@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { CheckCircle, XCircle, FileText, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEchantillons, getClient, getEssaisByEchantillon, updateEchantillon, Echantillon } from '../../lib/mockData';
 import { workflowApi } from '../../lib/workflowApi';
@@ -38,6 +38,7 @@ export function ValidationModule({ userRole }: ValidationModuleProps) {
   const [loading, setLoading] = useState(true);
   const [selectedRapport, setSelectedRapport] = useState<RapportValidation | null>(null);
   const [observations, setObservations] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadRapports = async () => {
     setLoading(true);
@@ -166,37 +167,42 @@ export function ValidationModule({ userRole }: ValidationModuleProps) {
   };
 
   const handleValidation = async (code: string, action: 'valide' | 'rejete') => {
-    const workflow = await workflowApi.getByCode(code);
-    if (!workflow?.id) return;
+    setIsSubmitting(true);
+    try {
+      const workflow = await workflowApi.getByCode(code);
+      if (!workflow?.id) return;
 
-    let success = false;
-    if (action === 'valide') {
-      if (userRole === 'directeur_technique') {
-        success = await workflowApi.validerDirecteurTechnique(workflow.id, observations);
+      let success = false;
+      if (action === 'valide') {
+        if (userRole === 'directeur_technique') {
+          success = await workflowApi.validerDirecteurTechnique(workflow.id, observations);
+        }
+        if (success) {
+          toast.success('Rapport validé et transféré au niveau suivant', {
+            description: observations || 'Aucune observation',
+          });
+        }
+      } else {
+        if (userRole === 'directeur_technique') {
+          success = await workflowApi.rejeterDirecteurTechnique(workflow.id, observations);
+        }
+        if (success) {
+          toast.error('Rapport rejeté', {
+            description: observations || 'Aucune observation',
+          });
+        }
       }
-      if (success) {
-        toast.success('Rapport validé et transféré au niveau suivant', {
-          description: observations || 'Aucune observation',
-        });
+
+      if (!success) {
+        toast.error('Erreur lors de la validation');
       }
-    } else {
-      if (userRole === 'directeur_technique') {
-        success = await workflowApi.rejeterDirecteurTechnique(workflow.id, observations);
-      }
-      if (success) {
-        toast.error('Rapport rejeté', {
-          description: observations || 'Aucune observation',
-        });
-      }
+
+      setSelectedRapport(null);
+      setObservations('');
+      loadRapports();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (!success) {
-      toast.error('Erreur lors de la validation');
-    }
-
-    setSelectedRapport(null);
-    setObservations('');
-    loadRapports();
   };
 
   return (
@@ -529,17 +535,37 @@ export function ValidationModule({ userRole }: ValidationModuleProps) {
                 <Button
                   variant="destructive"
                   onClick={() => handleValidation(selectedRapport.code, 'rejete')}
+                  disabled={isSubmitting}
                 >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Rejeter
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Traitement...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Rejeter
+                    </>
+                  )}
                 </Button>
                 <Button
                   style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}
                   onClick={() => handleValidation(selectedRapport.code, 'valide')}
+                  disabled={isSubmitting}
                 >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Valider
-                  {getNextRole() === null && ' (Final)'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Traitement...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Valider
+                      {getNextRole() === null && ' (Final)'}
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

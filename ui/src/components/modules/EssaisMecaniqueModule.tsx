@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Upload, CheckCircle, CalendarIcon, Send } from 'lucide-react';
+import { Upload, CheckCircle, CalendarIcon, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEchantillons, Echantillon as APIEchantillon } from '../../lib/echantillonService';
 import { essaiApi } from '../../lib/essaiApi';
@@ -433,6 +433,7 @@ function EchantillonCard({ echantillon, onUpdate, echantillons }: { echantillon:
 function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: EchantillonAvecEssais; essaiType: string; onClose: () => void }) {
   const [essaiBackend, setEssaiBackend] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const today = new Date();
   
   const calculateDateFin = (dateDebut: Date, dureeEstimee: number) => {
@@ -807,50 +808,68 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
           return canSend ? (
             <Button 
               onClick={async () => {
-                const resultats = getResultats();
-                
-                if (essai.statut === 'attente') {
+                setIsSubmitting(true);
+                try {
+                  const resultats = getResultats();
+                  
+                  if (essai.statut === 'attente') {
+                    await essaiApi.update(essai.id, {
+                      statut: 'en_cours',
+                      date_debut: format(formData.dateDebut, 'yyyy-MM-dd'),
+                      operateur: formData.operateur,
+                    });
+                  }
+                  
+                  // Utiliser updateEssaiResultats pour envoyer le fichier
+                  if (formData.fichierFile) {
+                    await updateEssaiResultats(essai.id, {
+                      resultats: resultats,
+                      commentaires: formData.commentaires,
+                      operateur: formData.operateur,
+                    }, formData.fichierFile);
+                  }
+                  
                   await essaiApi.update(essai.id, {
-                    statut: 'en_cours',
-                    date_debut: format(formData.dateDebut, 'yyyy-MM-dd'),
-                    operateur: formData.operateur,
-                  });
-                }
-                
-                // Utiliser updateEssaiResultats pour envoyer le fichier
-                if (formData.fichierFile) {
-                  await updateEssaiResultats(essai.id, {
+                    statut: 'termine',
+                    statut_validation: 'pending',
+                    date_fin: format(formData.dateFin || new Date(), 'yyyy-MM-dd'),
                     resultats: resultats,
                     commentaires: formData.commentaires,
                     operateur: formData.operateur,
-                  }, formData.fichierFile);
+                  });
+                  
+                  // Mettre à jour le statut de l'échantillon pour la décodification
+                  await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ statut: 'decodification' })
+                  });
+                  
+                  toast.success(`Essai ${essai.type} ${isRejete ? 'renvoyé' : 'envoyé'} à la décodification`);
+                  onClose();
+                } catch (error) {
+                  toast.error('Erreur lors de l\'envoi');
+                } finally {
+                  setIsSubmitting(false);
                 }
-                
-                await essaiApi.update(essai.id, {
-                  statut: 'termine',
-                  statut_validation: 'pending',
-                  date_fin: format(formData.dateFin || new Date(), 'yyyy-MM-dd'),
-                  resultats: resultats,
-                  commentaires: formData.commentaires,
-                  operateur: formData.operateur,
-                });
-                
-                // Mettre à jour le statut de l'échantillon pour la décodification
-                await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
-                  method: 'PATCH',
-                  headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ statut: 'decodification' })
-                });
-                
-                toast.success(`Essai ${essai.type} ${isRejete ? 'renvoyé' : 'envoyé'} à la décodification`);
-                onClose();
               }}
-              style={{ backgroundColor: '#28A745' }}
+              disabled={isSubmitting}
+              style={{ backgroundColor: isRejete ? '#FD7E14' : '#28A745' }}
             >
-              {isRejete ? 'Renvoyer à la décodification' : 'Envoyer à la décodification'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Envoi en cours...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  {isRejete ? '🔄 Renvoyer pour validation' : 'Envoyer pour décodification'}
+                </>
+              )}
             </Button>
           ) : null;
         })()}

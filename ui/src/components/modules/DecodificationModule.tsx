@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
-import { AlertCircle, CheckCircle, XCircle, FileText, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle, XCircle, FileText, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEchantillons as getAPIEchantillons } from '../../lib/echantillonService';
 import { essaiApi } from '../../lib/essaiApi';
@@ -266,6 +266,7 @@ function EchantillonDetails({ echantillon, onUpdate, onClose }: {
 }) {
   const [selectedEssaiId, setSelectedEssaiId] = useState<string | null>(null);
   const [envoyeAuTraitement, setEnvoyeAuTraitement] = useState(echantillon.statut === 'traitement');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const selectedEssai = echantillon.essais.find(e => e.id === selectedEssaiId);
 
   if (selectedEssai) {
@@ -349,6 +350,7 @@ function EchantillonDetails({ echantillon, onUpdate, onClose }: {
       <div className="flex justify-end gap-3 pt-4 border-t">
         <Button
             onClick={async () => {
+              setIsSubmitting(true);
               try {
                 const token = localStorage.getItem('access_token');
                 if (!token) {
@@ -375,17 +377,28 @@ function EchantillonDetails({ echantillon, onUpdate, onClose }: {
                 }
               } catch (error) {
                 toast.error('Erreur lors de l\'envoi');
+              } finally {
+                setIsSubmitting(false);
               }
             }}
-            disabled={!allAccepted}
+            disabled={!allAccepted || isSubmitting}
             style={{ 
               backgroundColor: !allAccepted ? '#6C757D' : '#28A745', 
               color: '#FFFFFF',
               opacity: !allAccepted ? 0.5 : 1
             }}
           >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Envoyer au traitement
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Envoi en cours...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Envoyer au traitement
+              </>
+            )}
           </Button>
       </div>
     </div>
@@ -402,6 +415,7 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
   const [validationStatus, setValidationStatus] = useState(essai.statut_validation || 'pending');
   const [showSendModal, setShowSendModal] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Récupérer le rôle de l'utilisateur depuis le backend
   useEffect(() => {
@@ -426,77 +440,82 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
   const isReceptionniste = userRole === 'receptionniste';
   
   const handleValidation = async (status: 'accepted' | 'rejected') => {
-    if (status === 'rejected') {
-      if (!validationComment.trim()) {
-        toast.error('Veuillez indiquer le motif du rejet');
-        return;
-      }
-      
-      await essaiApi.update(essai.id, {
-        statut_validation: status,
-        commentaires_validation: validationComment,
-        date_rejet: new Date().toISOString().split('T')[0],
-      });
-      
-      toast.error(`Essai ${essai.type} rejeté - L'opérateur doit le reprendre`);
-    } else {
-      await essaiApi.update(essai.id, {
-        statut_validation: status,
-        commentaires_validation: validationComment,
-      });
-      toast.success('Essai accepté');
-    }
-    
-    setValidationStatus(status);
-    await onUpdate();
-    
-    // Vérifier si tous les essais sont validés (acceptés OU rejetés)
-    const updatedEssais = echantillon.essais.map(e => 
-      e.id === essai.id ? { ...e, statut_validation: status } : e
-    );
-    const allValidated = updatedEssais.every(e => e.statut_validation === 'accepted' || e.statut_validation === 'rejected');
-    
-    console.log(`\n🔍 Vérification ${echantillon.code}:`);
-    console.log(`  - Essais totaux: ${updatedEssais.length}`);
-    console.log(`  - Tous validés: ${allValidated}`);
-    updatedEssais.forEach(e => {
-      console.log(`    • ${e.type}: ${e.statut_validation || 'pending'}`);
-    });
-    
-    if (allValidated) {
-      console.log(`✅ Envoi de ${echantillon.code} au traitement...`);
-      // Envoyer automatiquement au traitement
-      try {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-          console.error('❌ Pas de token d\'authentification');
+    setIsSubmitting(true);
+    try {
+      if (status === 'rejected') {
+        if (!validationComment.trim()) {
+          toast.error('Veuillez indiquer le motif du rejet');
           return;
         }
-        const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ statut: 'traitement' })
+        
+        await essaiApi.update(essai.id, {
+          statut_validation: status,
+          commentaires_validation: validationComment,
+          date_rejet: new Date().toISOString().split('T')[0],
         });
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`✅ ${echantillon.code} mis à jour:`, data);
-          toast.success(`Échantillon ${echantillon.code} envoyé au traitement`);
-        } else if (response.status === 401 || response.status === 403) {
-          console.error(`❌ Erreur d'authentification pour ${echantillon.code}`);
-        } else {
-          const error = await response.json();
-          console.error(`❌ Erreur mise à jour ${echantillon.code}:`, error);
-        }
-      } catch (error) {
-        console.error('Erreur envoi au traitement:', error);
+        
+        toast.error(`Essai ${essai.type} rejeté - L'opérateur doit le reprendre`);
+      } else {
+        await essaiApi.update(essai.id, {
+          statut_validation: status,
+          commentaires_validation: validationComment,
+        });
+        toast.success('Essai accepté');
       }
-    } else {
-      console.log(`⏳ ${echantillon.code} pas encore prêt (essais en attente)`);
+      
+      setValidationStatus(status);
+      await onUpdate();
+      
+      // Vérifier si tous les essais sont validés (acceptés OU rejetés)
+      const updatedEssais = echantillon.essais.map(e => 
+        e.id === essai.id ? { ...e, statut_validation: status } : e
+      );
+      const allValidated = updatedEssais.every(e => e.statut_validation === 'accepted' || e.statut_validation === 'rejected');
+      
+      console.log(`\n🔍 Vérification ${echantillon.code}:`);
+      console.log(`  - Essais totaux: ${updatedEssais.length}`);
+      console.log(`  - Tous validés: ${allValidated}`);
+      updatedEssais.forEach(e => {
+        console.log(`    • ${e.type}: ${e.statut_validation || 'pending'}`);
+      });
+      
+      if (allValidated) {
+        console.log(`✅ Envoi de ${echantillon.code} au traitement...`);
+        // Envoyer automatiquement au traitement
+        try {
+          const token = localStorage.getItem('access_token');
+          if (!token) {
+            console.error('❌ Pas de token d\'authentification');
+            return;
+          }
+          const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ statut: 'traitement' })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ ${echantillon.code} mis à jour:`, data);
+            toast.success(`Échantillon ${echantillon.code} envoyé au traitement`);
+          } else if (response.status === 401 || response.status === 403) {
+            console.error(`❌ Erreur d'authentification pour ${echantillon.code}`);
+          } else {
+            const error = await response.json();
+            console.error(`❌ Erreur mise à jour ${echantillon.code}:`, error);
+          }
+        } catch (error) {
+          console.error('Erreur envoi au traitement:', error);
+        }
+      } else {
+        console.log(`⏳ ${echantillon.code} pas encore prêt (essais en attente)`);
+      }
+      onBack();
+    } finally {
+      setIsSubmitting(false);
     }
-    onBack();
   };
   
   return (
@@ -746,23 +765,43 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
         <div className="flex gap-2">
           <Button
             onClick={() => handleValidation('accepted')}
+            disabled={isSubmitting}
             style={{
               backgroundColor: '#28A745',
               color: '#FFFFFF'
             }}
           >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Accepter
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Traitement...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Accepter
+              </>
+            )}
           </Button>
           <Button
             onClick={() => handleValidation('rejected')}
+            disabled={isSubmitting}
             style={{
               backgroundColor: '#DC3545',
               color: '#FFFFFF'
             }}
           >
-            <XCircle className="h-4 w-4 mr-2" />
-            Rejeter et renvoyer
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Traitement...
+              </>
+            ) : (
+              <>
+                <XCircle className="h-4 w-4 mr-2" />
+                Rejeter et renvoyer
+              </>
+            )}
           </Button>
         </div>
       </div>

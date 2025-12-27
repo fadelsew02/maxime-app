@@ -505,6 +505,9 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
     resultats: essaiData.resultats || {}
   };
   
+  // Permettre l'édition si l'essai est rejeté, même s'il est terminé
+  const peutEditer = essaiStatut !== 'termine' || isRejete;
+  
   const calculateDateFin = (dateDebut: Date, dureeEstimee: number) => {
     return addDays(dateDebut, dureeEstimee);
   };
@@ -633,7 +636,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
             value={formData.operateur}
             onChange={(e) => updateFormData({ operateur: e.target.value })}
             placeholder="Nom"
-            disabled={essaiStatut === 'termine'}
+            disabled={!peutEditer}
           />
         </div>
 
@@ -644,7 +647,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
               <Button
                 variant="outline"
                 className="w-full justify-start text-left"
-                disabled={essaiStatut === 'termine'}
+                disabled={!peutEditer}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {formData.dateDebut ? (
@@ -674,7 +677,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                 <Button
                   variant="outline"
                   className="w-full justify-start text-left"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {formData.dateFin ? (
@@ -712,7 +715,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.pourcent_inf_2mm || ''}
                   onChange={(e) => updateFormData({ pourcent_inf_2mm: e.target.value })}
                   placeholder="Ex: 85.5"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -724,7 +727,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.pourcent_inf_80um || ''}
                   onChange={(e) => updateFormData({ pourcent_inf_80um: e.target.value })}
                   placeholder="Ex: 45.2"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -736,7 +739,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.coefficient_uniformite || ''}
                   onChange={(e) => updateFormData({ coefficient_uniformite: e.target.value })}
                   placeholder="Ex: 6.5"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
             </>
@@ -751,7 +754,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.type_proctor || 'Normal'}
                   onChange={(e) => updateFormData({ type_proctor: e.target.value })}
                   placeholder="Normal ou Modifié"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -763,7 +766,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.densite_opt || ''}
                   onChange={(e) => updateFormData({ densite_opt: e.target.value })}
                   placeholder="Ex: 1.95"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -775,7 +778,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.teneur_eau_opt || ''}
                   onChange={(e) => updateFormData({ teneur_eau_opt: e.target.value })}
                   placeholder="Ex: 12.5"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
             </>
@@ -791,7 +794,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.cbr_95 || ''}
                   onChange={(e) => updateFormData({ cbr_95: e.target.value })}
                   placeholder="Ex: 45"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -802,7 +805,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.cbr_98 || ''}
                   onChange={(e) => updateFormData({ cbr_98: e.target.value })}
                   placeholder="Ex: 65"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -813,7 +816,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.cbr_100 || ''}
                   onChange={(e) => updateFormData({ cbr_100: e.target.value })}
                   placeholder="Ex: 85"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
               <div className="space-y-2">
@@ -825,7 +828,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   value={formData.gonflement || ''}
                   onChange={(e) => updateFormData({ gonflement: e.target.value })}
                   placeholder="Ex: 0.5"
-                  disabled={essaiStatut === 'termine'}
+                  disabled={!peutEditer}
                 />
               </div>
             </>
@@ -839,7 +842,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
               onChange={(e) => updateFormData({ commentaires: e.target.value })}
               placeholder="Observations et remarques sur l'essai..."
               rows={3}
-              disabled={essaiStatut === 'termine'}
+              disabled={!peutEditer}
             />
           </div>
 
@@ -850,14 +853,14 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
               id="file-upload"
               onChange={handleFileUpload}
               style={{ display: 'none' }}
-              disabled={essaiStatut === 'termine'}
+              disabled={!peutEditer}
             />
             <Button 
               type="button"
               variant="outline" 
               size="sm" 
               onClick={() => document.getElementById('file-upload')?.click()}
-              disabled={essaiStatut === 'termine'}
+              disabled={!peutEditer}
             >
               <Upload className="h-4 w-4 mr-2" />
               {formData.fichier ? 'Changer le fichier' : 'Sélectionner un fichier'}

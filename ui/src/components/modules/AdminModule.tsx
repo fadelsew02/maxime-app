@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { BarChart3, TrendingUp, Clock, CheckCircle, XCircle, Package, TestTube, FileCheck } from 'lucide-react';
+import { CheckCircle, XCircle, Package, TestTube, FileCheck } from 'lucide-react';
 import { getEchantillons, getEssais } from '../../lib/mockData';
 
 export function AdminModule() {

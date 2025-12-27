@@ -402,20 +402,8 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
               for (const ech of client.echantillons) {
                 const workflow = await workflowApi.getByCode(ech.code);
                 if (workflow?.id) {
-                  const response = await fetch(`http://127.0.0.1:8000/api/workflows/${workflow.id}/`, {
-                    method: 'PATCH',
-                    headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      statut: 'rejete'
-                    })
-                  });
-                  if (!response.ok) {
-                    const error = await response.json();
-                    console.error('Erreur rejet:', error);
-                  }
+                  // Utiliser l'endpoint de rejet du backend
+                  await workflowApi.rejeterChefProjet(workflow.id, '');
                 }
               }
               toast.error('Rapport rejeté et renvoyé au traitement');
@@ -431,21 +419,11 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
               for (const ech of client.echantillons) {
                 const workflow = await workflowApi.getByCode(ech.code);
                 if (workflow?.id) {
-                  await fetch(`http://127.0.0.1:8000/api/workflows/${workflow.id}/`, {
-                    method: 'PATCH',
-                    headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      etape_actuelle: 'chef_service',
-                      validation_chef_projet: true,
-                      date_validation_chef_projet: new Date().toISOString()
-                    })
-                  });
+                  // Utiliser l'endpoint de validation du backend
+                  await workflowApi.validerChefProjet(workflow.id, '');
                 }
               }
-              toast.success('Rapport validé et envoyé au directeur technique');
+              toast.success('Rapport validé et envoyé au chef service');
               onClose();
             }}
           >

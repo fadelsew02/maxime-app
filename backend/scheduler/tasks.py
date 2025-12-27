@@ -161,3 +161,86 @@ def update_essai_status_from_planning():
         updated_count += 1
     
     return f"Statut mis à jour pour {updated_count} essais"
+
+
+@shared_task
+def auto_send_scheduled_essais():
+    """
+    Envoie automatiquement les essais dont la date_reception est arrivée
+    Vérifie tous les échantillons en stockage et envoie les essais planifiés pour aujourd'hui ou avant
+    """
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    today = timezone.now().date()
+    
+    # Récupérer tous les échantillons en stockage
+    echantillons_stockage = Echantillon.objects.filter(statut='stockage')
+    
+    echantillons_envoyes = 0
+    essais_envoyes = 0
+    
+    for echantillon in echantillons_stockage:
+        # Récupérer tous les essais de cet échantillon
+        essais = echantillon.essais.all()
+        
+        if not essais.exists():
+            continue
+        
+        # Vérifier si tous les essais ont une date_reception <= aujourd'hui
+        tous_prets = True
+        for essai in essais:
+            if not essai.date_reception or essai.date_reception > today:
+                tous_prets = False
+                break
+        
+        # Si tous les essais sont prêts, changer le statut de l'échantillon
+        if tous_prets:
+            echantillon.statut = 'essais'
+            echantillon.save()
+            echantillons_envoyes += 1
+            essais_envoyes += essais.count()
+            
+            # Créer des notifications pour les opérateurs
+            essais_route = essais.filter(type__in=['AG', 'Proctor', 'CBR'])
+            essais_meca = essais.filter(type__in=['Oedometre', 'Cisaillement'])
+            
+            if essais_route.exists():
+                operateurs_route = User.objects.filter(role='operateur_route', is_active=True)
+                for operateur in operateurs_route:
+                    Notification.objects.create(
+                        user=operateur,
+                        type='info',
+                        title='Nouvel échantillon en attente',
+                        message=f'L\'échantillon {echantillon.code} a été envoyé automatiquement au laboratoire Route pour les essais: {", ".join([e.type for e in essais_route])}',
+                        module='Stockage',
+                        action_required=True,
+                        echantillon=echantillon
+                    )
+            
+            if essais_meca.exists():
+                operateurs_meca = User.objects.filter(role='operateur_mecanique', is_active=True)
+                for operateur in operateurs_meca:
+                    Notification.objects.create(
+                        user=operateur,
+                        type='info',
+                        title='Nouvel échantillon en attente',
+                        message=f'L\'échantillon {echantillon.code} a été envoyé automatiquement au laboratoire Mécanique pour les essais: {", ".join([e.type for e in essais_meca])}',
+                        module='Stockage',
+                        action_required=True,
+                        echantillon=echantillon
+                    )
+            
+            # Notification pour le responsable matériaux
+            responsables = User.objects.filter(role='responsable_materiaux', is_active=True)
+            for responsable in responsables:
+                Notification.objects.create(
+                    user=responsable,
+                    type='success',
+                    title='Échantillon envoyé automatiquement',
+                    message=f'L\'échantillon {echantillon.code} a été envoyé automatiquement aux laboratoires (date planifiée atteinte)',
+                    module='Stockage',
+                    echantillon=echantillon
+                )
+    
+    return f"Envoyé automatiquement {echantillons_envoyes} échantillon(s) ({essais_envoyes} essais)"

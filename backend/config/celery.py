@@ -28,6 +28,10 @@ app.conf.beat_schedule = {
         'task': 'scheduler.tasks.optimize_daily_schedule',
         'schedule': crontab(hour=6, minute=0),  # Every day at 6 AM
     },
+    'auto-send-scheduled-essais': {
+        'task': 'scheduler.tasks.auto_send_scheduled_essais',
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+    },
 }
 
 @app.task(bind=True)

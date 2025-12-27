@@ -1218,6 +1218,62 @@ class CapaciteLaboratoireViewSet(viewsets.ModelViewSet):
             'capacite_restante': max(0, capacite.capacite_quotidienne - essais_planifies),
             'message': 'Capacité disponible' if disponible else 'Capacité atteinte'
         })
+    
+    @action(detail=False, methods=['get'])
+    def prochaine_date_disponible(self, request):
+        """Calcule la prochaine date disponible pour un type d'essai en fonction de la capacité"""
+        type_essai = request.query_params.get('type_essai')
+        
+        if not type_essai:
+            return Response(
+                {'error': 'Type d\'essai requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Récupérer la capacité pour ce type d'essai
+        capacite = CapaciteLaboratoire.objects.filter(type_essai=type_essai).first()
+        
+        if not capacite:
+            # Si pas de capacité définie, retourner demain
+            demain = timezone.now().date() + timedelta(days=1)
+            return Response({
+                'date_disponible': demain.strftime('%Y-%m-%d'),
+                'message': 'Aucune limite de capacité définie'
+            })
+        
+        # Commencer à partir de demain
+        date_test = timezone.now().date() + timedelta(days=1)
+        max_jours = 30  # Chercher jusqu'à 30 jours dans le futur
+        
+        for _ in range(max_jours):
+            # Ignorer les weekends
+            if date_test.weekday() >= 5:  # 5 = samedi, 6 = dimanche
+                date_test += timedelta(days=1)
+                continue
+            
+            # Compter les essais déjà planifiés pour cette date
+            essais_planifies = Essai.objects.filter(
+                type=type_essai,
+                date_reception=date_test
+            ).count()
+            
+            # Vérifier si la capacité est disponible
+            if essais_planifies < capacite.capacite_quotidienne:
+                return Response({
+                    'date_disponible': date_test.strftime('%Y-%m-%d'),
+                    'capacite_totale': capacite.capacite_quotidienne,
+                    'capacite_utilisee': essais_planifies,
+                    'capacite_restante': capacite.capacite_quotidienne - essais_planifies,
+                    'message': f'Prochaine date disponible trouvée'
+                })
+            
+            date_test += timedelta(days=1)
+        
+        # Si aucune date trouvée dans les 30 jours, retourner dans 30 jours
+        return Response({
+            'date_disponible': date_test.strftime('%Y-%m-%d'),
+            'message': 'Aucune date disponible dans les 30 prochains jours, date suggérée par défaut'
+        })
 
 
 # Mixin pour les workflows rejetés

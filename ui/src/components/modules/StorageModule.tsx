@@ -541,14 +541,40 @@ export function StorageModule() {
                             const datesTemp: Record<string, Date> = {};
                             const originalesTemp: Record<string, Date> = {};
                             
-                            essais.forEach(essai => {
-                              if (essai.date_reception) {
+                            // Pour chaque essai, charger ou calculer la date
+                            for (const essaiType of ech.essais) {
+                              const essai = essais.find(e => e.type === essaiType);
+                              
+                              if (essai && essai.date_reception) {
+                                // Si une date existe déjà, l'utiliser
                                 const dateReception = new Date(essai.date_reception);
-                                datesTemp[essai.type] = dateReception;
-                                originalesTemp[essai.type] = dateReception;
-                                console.log(`🔄 Chargé date pour ${essai.type}:`, dateReception);
+                                datesTemp[essaiType] = dateReception;
+                                originalesTemp[essaiType] = dateReception;
+                                console.log(`🔄 Chargé date existante pour ${essaiType}:`, dateReception);
+                              } else {
+                                // Sinon, calculer la prochaine date disponible via l'API
+                                try {
+                                  const response = await fetch(
+                                    `http://127.0.0.1:8000/api/capacites/prochaine_date_disponible/?type_essai=${essaiType}`,
+                                    {
+                                      headers: {
+                                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                                      },
+                                    }
+                                  );
+                                  
+                                  if (response.ok) {
+                                    const data = await response.json();
+                                    const dateSuggeree = new Date(data.date_disponible);
+                                    datesTemp[essaiType] = dateSuggeree;
+                                    originalesTemp[essaiType] = dateSuggeree;
+                                    console.log(`✨ Date suggérée pour ${essaiType}:`, dateSuggeree, `(capacité: ${data.capacite_restante}/${data.capacite_totale})`);
+                                  }
+                                } catch (error) {
+                                  console.error(`Erreur calcul date pour ${essaiType}:`, error);
+                                }
                               }
-                            });
+                            }
                             
                             setDateEnvoiParEssai(datesTemp);
                             setOriginalEstimatedDateParEssai(originalesTemp);
@@ -727,15 +753,10 @@ export function StorageModule() {
                         
                         const isToday = selectedDate.getTime() === today.getTime();
                         const isPast = selectedDate < today;
-                        const currentDelay = delayDaysParEssai[essaiType] || 0;
                         
-                        // Pas de bouton si retardé (delay > 0)
-                        if (currentDelay > 0) {
-                          return null;
-                        }
-                        
-                        // Bouton "Envoyer maintenant" si accéléré (delay < 0) OU date passée/aujourd'hui
-                        if (currentDelay < 0 || isToday || isPast) {
+                        // Le bouton "Envoyer maintenant" apparaît UNIQUEMENT si :
+                        // - La date est aujourd'hui OU dans le passé
+                        if (isToday || isPast) {
                           return (
                             <Button
                               className="w-full"
@@ -748,7 +769,7 @@ export function StorageModule() {
                           );
                         }
                         
-                        // Pas de bouton pour date future non accélérée
+                        // Pas de bouton pour les dates futures
                         return null;
                       })()}
                     </div>

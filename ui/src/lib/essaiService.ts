@@ -11,6 +11,7 @@ export interface EssaiData {
   section: string;
   duree_estimee: number;
   operateur?: string;
+  date_reception?: string;
   date_debut?: string;
   date_fin?: string;
   resultats?: any;

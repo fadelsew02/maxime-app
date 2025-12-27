@@ -259,6 +259,8 @@ export function ChefProjetModule() {
 function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () => void }) {
   const [selectedEchantillon, setSelectedEchantillon] = useState<EchantillonGroupe | null>(null);
   const [allClientEchantillons, setAllClientEchantillons] = useState<any[]>([]);
+  const [commentaire, setCommentaire] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const loadAllEchantillons = async () => {
@@ -390,45 +392,85 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
       <div className="space-y-4 pt-4 border-t">
         <Label>Commentaire</Label>
         <Textarea 
+          value={commentaire}
+          onChange={(e) => setCommentaire(e.target.value)}
           placeholder="Ajouter un commentaire..."
           className="min-h-[100px]"
+          disabled={isSubmitting}
         />
         
         <div className="flex gap-3 justify-end">
           <Button
             variant="outline"
             style={{ borderColor: '#DC3545', color: '#DC3545' }}
+            disabled={isSubmitting}
             onClick={async () => {
-              for (const ech of client.echantillons) {
-                const workflow = await workflowApi.getByCode(ech.code);
-                if (workflow?.id) {
-                  // Utiliser l'endpoint de rejet du backend
-                  await workflowApi.rejeterChefProjet(workflow.id, '');
-                }
+              if (!commentaire.trim()) {
+                toast.error('Veuillez indiquer la raison du rejet');
+                return;
               }
-              toast.error('Rapport rejeté et renvoyé au traitement');
-              onClose();
+              
+              setIsSubmitting(true);
+              try {
+                for (const ech of client.echantillons) {
+                  const workflow = await workflowApi.getByCode(ech.code);
+                  if (workflow?.id) {
+                    await workflowApi.rejeterChefProjet(workflow.id, commentaire);
+                  }
+                }
+                toast.error('Rapport rejeté et renvoyé au traitement');
+                onClose();
+              } catch (error) {
+                toast.error('Erreur lors du rejet');
+              } finally {
+                setIsSubmitting(false);
+              }
             }}
           >
-            <XCircle className="h-4 w-4 mr-2" />
-            Rejeter
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Traitement...
+              </>
+            ) : (
+              <>
+                <XCircle className="h-4 w-4 mr-2" />
+                Rejeter
+              </>
+            )}
           </Button>
           <Button
             style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}
+            disabled={isSubmitting}
             onClick={async () => {
-              for (const ech of client.echantillons) {
-                const workflow = await workflowApi.getByCode(ech.code);
-                if (workflow?.id) {
-                  // Utiliser l'endpoint de validation du backend
-                  await workflowApi.validerChefProjet(workflow.id, '');
+              setIsSubmitting(true);
+              try {
+                for (const ech of client.echantillons) {
+                  const workflow = await workflowApi.getByCode(ech.code);
+                  if (workflow?.id) {
+                    await workflowApi.validerChefProjet(workflow.id, commentaire);
+                  }
                 }
+                toast.success('Rapport validé et envoyé au chef service');
+                onClose();
+              } catch (error) {
+                toast.error('Erreur lors de la validation');
+              } finally {
+                setIsSubmitting(false);
               }
-              toast.success('Rapport validé et envoyé au chef service');
-              onClose();
             }}
           >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Valider
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Traitement...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Valider
+              </>
+            )}
           </Button>
         </div>
       </div>

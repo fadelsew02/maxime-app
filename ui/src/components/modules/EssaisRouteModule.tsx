@@ -540,7 +540,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
       resultats: getResultats(),
       commentaires: formData.commentaires,
       operateur: formData.operateur,
-      dateDebut: formData.dateDebut ? format(formData.dateDebut, 'yyyy-MM-dd') : null,
+      dateDebut: formData.dateDebut ? format(formData.dateDebut, 'yyyy-MM-dd') : undefined,
     });
 
     // Changer le statut de l'échantillon à 'decodification'
@@ -877,7 +877,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
       </div>
 
       <div className="flex gap-3 justify-end pt-4">
-        {essaiStatut === 'termine' && (
+        {essaiStatut === 'termine' && !isRejete && (
           <div className="w-full text-center py-3">
             <Badge style={{ backgroundColor: '#28A745', color: '#FFFFFF', fontSize: '14px', padding: '8px 16px' }}>
               ✓ Essai terminé et envoyé à la décodification
@@ -885,7 +885,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
           </div>
         )}
         
-        {formData.fichier && essaiStatut !== 'termine' && (
+        {formData.fichier && (essaiStatut !== 'termine' || isRejete) && (
           <Button 
             onClick={async () => {
               const resultats = getResultats();
@@ -923,6 +923,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                 })
                 
                 setEssaiStatut('termine');
+                setIsRejete(false); // Réinitialiser le flag de rejet
                 onClose();
                 setTimeout(() => {
                   window.location.reload();
@@ -932,10 +933,10 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                 toast.error('Erreur lors de l\'envoi');
               }
             }}
-            style={{ backgroundColor: '#28A745' }}
+            style={{ backgroundColor: isRejete ? '#FD7E14' : '#28A745' }}
           >
             <Send className="h-4 w-4 mr-2" />
-            Envoyer pour décodification
+            {isRejete ? '🔄 Renvoyer pour validation' : 'Envoyer pour décodification'}
           </Button>
         )}
         

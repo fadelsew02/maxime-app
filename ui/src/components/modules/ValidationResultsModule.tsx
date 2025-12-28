@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import { addBordereauPage } from '../../lib/addBordereauPage';
 
 interface RapportValide {
   code: string;
@@ -20,6 +21,10 @@ interface RapportValide {
   comment: string;
   workflowId: string;
   clientId: string;
+  nature?: string;
+  essaisTypes?: string[];
+  dateReception?: string;
+  clientContact?: string;
 }
 
 interface GroupeClient {
@@ -43,6 +48,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
   const [isDrawing, setIsDrawing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [signedDocumentUrl, setSignedDocumentUrl] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const loadRapportsValides = async () => {
     setLoading(true);
@@ -68,7 +74,11 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
             validationDate: workflow.date_validation_directeur_technique,
             comment: workflow.commentaire_directeur_technique || '',
             workflowId: workflow.id,
-            clientId: workflow.client_id || workflow.client_name || 'unknown'
+            clientId: workflow.client_id || workflow.client_name || 'unknown',
+            nature: workflow.nature || 'Échantillon',
+            essaisTypes: workflow.essais_types || [],
+            dateReception: workflow.date_reception,
+            clientContact: workflow.client_contact || workflow.client_name
           });
         }
       }
@@ -96,7 +106,24 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
 
   useEffect(() => {
     loadRapportsValides();
+    loadCurrentUser();
   }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/users/me/', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        setCurrentUser(userData);
+      }
+    } catch (error) {
+      console.error('Erreur chargement utilisateur:', error);
+    }
+  };
 
   const initCanvas = () => {
     const canvas = canvasRef.current;
@@ -142,53 +169,62 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const generateSignedDocument = () => {
+  const generateSignedDocument = async () => {
     const canvas = canvasRef.current;
     if (!canvas) {
       toast.error('Signature non disponible');
       return;
     }
 
+    if (!selectedRapport?.fileData) {
+      toast.error('PDF non disponible');
+      return;
+    }
+
     const signatureData = canvas.toDataURL('image/png');
     
-    // Créer un document HTML avec PDF et signature
-    const signedHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Rapport Signé - ${selectedRapport?.code}</title>
-          <style>
-            body { margin: 0; padding: 20px; font-family: Arial; }
-            .container { max-width: 900px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .pdf-container { border: 2px solid #003366; margin-bottom: 20px; }
-            .signature-section { border-top: 2px solid #003366; padding: 20px; background: #f9f9f9; }
-            .signature-img { max-width: 300px; border: 1px solid #ccc; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>Rapport d'Essai - ${selectedRapport?.code}</h2>
-              <p>Client: ${selectedRapport?.clientName}</p>
-            </div>
-            <div class="pdf-container">
-              <iframe src="${selectedRapport?.fileData}" width="100%" height="600px"></iframe>
-            </div>
-            <div class="signature-section">
-              <h3>Signature du Directeur SNERTP</h3>
-              <p>Date: ${new Date().toLocaleString('fr-FR')}</p>
-              <img src="${signatureData}" class="signature-img" alt="Signature" />
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    const blob = new Blob([signedHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    setSignedDocumentUrl(url);
-    setShowPreview(true);
+    try {
+      setIsSigning(true);
+      toast.info('Génération du document signé...');
+      
+      // Préparer les données du bordereau
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('fr-FR', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+      }).toUpperCase();
+      
+      const bordereauData = {
+        numero: `${Math.floor(Math.random() * 10000)} / CNER-TP/DG`,
+        date: dateStr,
+        essaisRealises: selectedRapport.nature || 'Échantillon de sol',
+        demandePar: selectedRapport.clientName,
+        compteDe: selectedRapport.clientName,
+        dateEssais: selectedRapport.dateReception ? 
+          new Date(selectedRapport.dateReception).toLocaleDateString('fr-FR') : 
+          now.toLocaleDateString('fr-FR'),
+        lieuEssais: 'Laboratoire Essais Spéciaux',
+        natureEssais: Array.isArray(selectedRapport.essaisTypes) && selectedRapport.essaisTypes.length > 0 ? 
+          selectedRapport.essaisTypes.join(', ') : 
+          'Essais géotechniques',
+        adresseRecepteur: selectedRapport.clientContact || selectedRapport.clientName,
+        observations: selectedRapport.comment || 'R.A.S.',
+        directeurNom: currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : 'Directeur SNERTP'
+      };
+      
+      // Utiliser addBordereauPage pour ajouter la page de signature au début
+      const signedPdfUrl = await addBordereauPage(selectedRapport.fileData, signatureData, bordereauData);
+      
+      setSignedDocumentUrl(signedPdfUrl);
+      setShowPreview(true);
+      toast.success('Document signé généré avec succès');
+    } catch (error) {
+      console.error('Erreur génération document signé:', error);
+      toast.error('Erreur lors de la génération du document signé');
+    } finally {
+      setIsSigning(false);
+    }
   };
 
   const handleSendToMarketing = async () => {
@@ -412,16 +448,23 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
                 {!showPreview ? (
                   <Button
                     onClick={generateSignedDocument}
+                    disabled={isSigning}
                     style={{ backgroundColor: '#28A745' }}
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Prévisualiser le document signé
+                    {isSigning ? 'Génération...' : 'Prévisualiser le document signé'}
                   </Button>
                 ) : (
                   <>
                     <Button
                       variant="outline"
-                      onClick={() => setShowPreview(false)}
+                      onClick={() => {
+                        setShowPreview(false);
+                        if (signedDocumentUrl) {
+                          URL.revokeObjectURL(signedDocumentUrl);
+                          setSignedDocumentUrl('');
+                        }
+                      }}
                     >
                       Modifier la signature
                     </Button>

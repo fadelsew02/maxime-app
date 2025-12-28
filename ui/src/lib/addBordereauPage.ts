@@ -1,10 +1,50 @@
 import { PDFDocument } from 'pdf-lib';
 import html2canvas from 'html2canvas';
 
-export async function addBordereauPage(pdfUrl: string, signature: string): Promise<string> {
+export async function addBordereauPage(
+  pdfUrl: string, 
+  signature: string,
+  data?: {
+    numero?: string;
+    date?: string;
+    essaisRealises?: string;
+    demandePar?: string;
+    compteDe?: string;
+    dateEssais?: string;
+    lieuEssais?: string;
+    natureEssais?: string;
+    adresseRecepteur?: string;
+    observations?: string;
+    directeurNom?: string;
+  }
+): Promise<string> {
   console.log('=== DEBUT addBordereauPage ===');
   console.log('PDF URL:', pdfUrl);
   console.log('Signature:', signature ? 'Présente' : 'Absente');
+  console.log('Data:', data);
+  
+  // Valeurs par défaut
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR', { 
+    day: '2-digit', 
+    month: 'short', 
+    year: 'numeric' 
+  }).toUpperCase();
+  
+  const bordereau = {
+    numero: data?.numero || `${Math.floor(Math.random() * 10000)} / CNER-TP/DG`,
+    date: data?.date || dateStr,
+    essaisRealises: data?.essaisRealises || 'Échantillon de sol',
+    demandePar: data?.demandePar || 'Client',
+    compteDe: data?.compteDe || 'Client',
+    dateEssais: data?.dateEssais || now.toLocaleDateString('fr-FR'),
+    lieuEssais: data?.lieuEssais || 'Laboratoire Essais Spéciaux',
+    natureEssais: data?.natureEssais || 'Essais géotechniques',
+    adresseRecepteur: data?.adresseRecepteur || 'Client',
+    observations: data?.observations || 'R.A.S.',
+    directeurNom: data?.directeurNom || 'Kpadon C. MOUSSOUGAN'
+  };
+  
   // VOTRE HTML EXACT
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -88,9 +128,9 @@ text-align: left;
 </div>
 
 <div class="meta">
-    N° : 4852 / CNER-TP/DG<br>
+    N° : ${bordereau.numero}<br>
     <br>
-    Y. le 21 DEC 2021
+    Y. le ${bordereau.date}
 </div>
 
 <div class="title">
@@ -100,46 +140,38 @@ text-align: left;
 <table>
     <tr>
         <td class="label">ESSAIS RÉALISÉS SUR :</td>
-        <td>
-            Forage à béton Ø 16, Ø 12 et Ø 10 produits à l'usine de SIAB
-            et employés sur le chantier du lycée d'Ifangni
-        </td>
+        <td>${bordereau.essaisRealises}</td>
     </tr>
     <tr>
         <td class="label">À la demande de :</td>
-        <td>SIAB</td>
+        <td>${bordereau.demandePar}</td>
     </tr>
     <tr>
         <td class="label">Pour le compte de :</td>
-        <td>SIAB</td>
+        <td>${bordereau.compteDe}</td>
     </tr>
     <tr>
         <td class="label">DATE ET LIEU DES ESSAIS :</td>
-        <td>25/10/2021 au Laboratoire Essais Spéciaux</td>
+        <td>${bordereau.dateEssais} au ${bordereau.lieuEssais}</td>
     </tr>
     <tr>
         <td class="label">NATURE DES ESSAIS :</td>
-        <td>
-            Mesure du diamètre, détermination de la masse linéique
-            et essai de traction
-        </td>
+        <td>${bordereau.natureEssais}</td>
     </tr>
     <tr>
         <td class="label">ADRESSE DU RÉCEPTEUR DU RAPPORT DES ESSAIS :</td>
-        <td>
-            SIAB ; Tél : 20 24 60 50 / 20 24 62 52 / 94 46 70 70
-        </td>
+        <td>${bordereau.adresseRecepteur}</td>
     </tr>
     <tr>
         <td class="label">OBSERVATIONS :</td>
-        <td>R.A.S.</td>
+        <td>${bordereau.observations}</td>
     </tr>
 </table>
 
 <div class="signature">
     Le Directeur Général<br><br>
     <img src="${signature}" style="max-width: 300px; margin: 10px auto; display: block;" /><br>
-    <strong>Kpadon C. MOUSSOUGAN</strong>
+    <strong>${bordereau.directeurNom}</strong>
 </div>
 
 <div class="footer">
@@ -159,14 +191,14 @@ text-align: left;
   div.style.width = '210mm';
   document.body.appendChild(div);
 
-  // Convertir en image
+  // Convertir en image avec une hauteur suffisante
   const canvas = await html2canvas(div, { 
     scale: 2, 
     backgroundColor: '#ffffff',
     width: 794,
-    height: 1123,
+    height: 1400,  // Augmenté pour capturer tout le contenu
     windowWidth: 794,
-    windowHeight: 1123
+    windowHeight: 1400
   });
   document.body.removeChild(div);
 
@@ -186,14 +218,36 @@ text-align: left;
 
   // Page 1: Bordereau
   console.log('Ajout de la page bordereau...');
-  const page1 = newPdf.addPage([595.28, 841.89]);
+  const page1 = newPdf.addPage([595.28, 841.89]);  // A4 en points
   const img = await newPdf.embedPng(imgData);
-  const imgDims = img.scale(0.75);
+  
+  // Calculer les dimensions pour remplir la page en gardant le ratio
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const imgAspectRatio = img.width / img.height;
+  const pageAspectRatio = pageWidth / pageHeight;
+  
+  let drawWidth, drawHeight, drawX, drawY;
+  
+  if (imgAspectRatio > pageAspectRatio) {
+    // Image plus large que la page
+    drawWidth = pageWidth * 0.9;  // 90% de la largeur
+    drawHeight = drawWidth / imgAspectRatio;
+    drawX = (pageWidth - drawWidth) / 2;
+    drawY = pageHeight - drawHeight - 20;  // 20 points de marge en haut
+  } else {
+    // Image plus haute que la page
+    drawHeight = pageHeight * 0.95;  // 95% de la hauteur
+    drawWidth = drawHeight * imgAspectRatio;
+    drawX = (pageWidth - drawWidth) / 2;
+    drawY = pageHeight - drawHeight - 10;  // 10 points de marge en haut
+  }
+  
   page1.drawImage(img, { 
-    x: (595.28 - imgDims.width) / 2, 
-    y: (841.89 - imgDims.height) / 2, 
-    width: imgDims.width, 
-    height: imgDims.height 
+    x: drawX, 
+    y: drawY, 
+    width: drawWidth, 
+    height: drawHeight 
   });
   console.log('Page bordereau ajoutée');
 

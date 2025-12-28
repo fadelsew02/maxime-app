@@ -51,7 +51,15 @@
     },
     build: {
       target: 'esnext',
-      outDir: 'build',
+      outDir: '../backend/templates',
+      assetsDir: 'static',
+      rollupOptions: {
+        output: {
+          entryFileNames: 'static/js/[name].[hash].js',
+          chunkFileNames: 'static/js/[name].[hash].js',
+          assetFileNames: 'static/[ext]/[name].[hash].[ext]'
+        }
+      }
     },
     server: {
       port: 3000,

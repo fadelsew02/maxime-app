@@ -19,6 +19,13 @@ interface RapportValide {
   validationDate: string;
   comment: string;
   workflowId: string;
+  clientId: string;
+}
+
+interface GroupeClient {
+  clientId: string;
+  clientName: string;
+  rapports: RapportValide[];
 }
 
 interface ValidationResultsModuleProps {
@@ -26,7 +33,7 @@ interface ValidationResultsModuleProps {
 }
 
 export function ValidationResultsModule({ userRole }: ValidationResultsModuleProps = {}) {
-  const [rapportsValides, setRapportsValides] = useState<RapportValide[]>([]);
+  const [groupesClients, setGroupesClients] = useState<GroupeClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRapport, setSelectedRapport] = useState<RapportValide | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,7 +67,8 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
             fileData: workflow.file_data || '',
             validationDate: workflow.date_validation_directeur_technique,
             comment: workflow.commentaire_directeur_technique || '',
-            workflowId: workflow.id
+            workflowId: workflow.id,
+            clientId: workflow.client_id || workflow.client_name || 'unknown'
           });
         }
       }
@@ -68,7 +76,21 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
       console.error('Erreur chargement rapports validés:', e);
     }
 
-    setRapportsValides(rapports);
+    // Regrouper par client_id
+    const groupesMap = new Map<string, GroupeClient>();
+    
+    rapports.forEach(rapport => {
+      if (!groupesMap.has(rapport.clientId)) {
+        groupesMap.set(rapport.clientId, {
+          clientId: rapport.clientId,
+          clientName: rapport.clientName,
+          rapports: []
+        });
+      }
+      groupesMap.get(rapport.clientId)!.rapports.push(rapport);
+    });
+
+    setGroupesClients(Array.from(groupesMap.values()));
     setLoading(false);
   };
 
@@ -234,7 +256,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
             <div>
               <CardTitle>Rapports validés</CardTitle>
               <CardDescription>
-                {rapportsValides.length} rapport(s) validé(s)
+                {groupesClients.length} rapport(s) validé(s)
               </CardDescription>
             </div>
             <Button onClick={loadRapportsValides} disabled={loading}>
@@ -249,14 +271,14 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 <p className="mt-2 text-gray-500">Chargement...</p>
               </div>
-            ) : rapportsValides.length === 0 ? (
+            ) : groupesClients.length === 0 ? (
               <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
                 Aucun rapport validé
               </div>
             ) : (
-              rapportsValides.map((rapport) => (
+              groupesClients.map((groupe) => (
                 <div
-                  key={rapport.code}
+                  key={groupe.clientId}
                   className="p-4 rounded-lg border"
                   style={{ backgroundColor: '#D4EDDA', borderColor: '#28A745' }}
                 >
@@ -267,22 +289,23 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Validé
                         </Badge>
-                        <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
-                          {rapport.code}
-                        </Badge>
+                        <div className="flex gap-2">
+                          {groupe.rapports.map((rapport) => (
+                            <Badge key={rapport.code} style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
+                              {rapport.code}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                       <div className="text-sm space-y-1" style={{ color: '#155724' }}>
-                        <p>Client: {rapport.clientName}</p>
-                        <p>Validé le: {rapport.validationDate ? new Date(rapport.validationDate).toLocaleString('fr-FR') : '-'}</p>
-                        {rapport.comment && (
-                          <p>Observation: {rapport.comment}</p>
-                        )}
+                        <p>Client: {groupe.clientName}</p>
+                        <p>Validé le: {groupe.rapports[0]?.validationDate ? new Date(groupe.rapports[0].validationDate).toLocaleString('fr-FR') : '-'}</p>
                       </div>
                     </div>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openModal(rapport)}
+                      onClick={() => openModal(groupe.rapports[0])}
                       style={{ borderColor: '#28A745', color: '#28A745' }}
                     >
                       <FileText className="h-4 w-4 mr-2" />

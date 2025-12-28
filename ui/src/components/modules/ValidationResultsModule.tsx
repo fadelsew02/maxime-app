@@ -49,6 +49,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
   const [showPreview, setShowPreview] = useState(false);
   const [signedDocumentUrl, setSignedDocumentUrl] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedGroupe, setSelectedGroupe] = useState<GroupeClient | null>(null);
 
   const loadRapportsValides = async () => {
     setLoading(true);
@@ -228,7 +229,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
   };
 
   const handleSendToMarketing = async () => {
-    if (!selectedRapport) return;
+    if (!selectedGroupe || !selectedGroupe.rapports.length) return;
     
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -236,30 +237,65 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
       return;
     }
 
+    if (!signedDocumentUrl) {
+      toast.error('Veuillez d\'abord générer le document signé');
+      return;
+    }
+
     const signatureData = canvas.toDataURL('image/png');
     
     setIsSending(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/rapports-marketing/create_from_workflow/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          workflow_id: selectedRapport.workflowId,
-          signature_directeur_snertp: signatureData,
-        }),
+      // Convertir le PDF signé en base64
+      const signedPdfBlob = await fetch(signedDocumentUrl).then(r => r.blob());
+      const signedPdfBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(signedPdfBlob);
       });
 
-      if (response.ok) {
-        toast.success('Rapport envoyé au service marketing');
+      // Envoyer TOUS les rapports du groupe au marketing
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const rapport of selectedGroupe.rapports) {
+        try {
+          const response = await fetch('http://127.0.0.1:8000/api/rapports-marketing/create_from_workflow/', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              workflow_id: rapport.workflowId,
+              signature_directeur_snertp: signatureData,
+              signed_report_data: signedPdfBase64, // Envoyer le PDF signé
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+            const error = await response.json();
+            console.error(`Erreur pour ${rapport.code}:`, error);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Erreur pour ${rapport.code}:`, error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} rapport(s) envoyé(s) au service marketing`);
         setIsModalOpen(false);
         setSelectedRapport(null);
+        setSelectedGroupe(null);
         loadRapportsValides();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Erreur lors de l\'envoi');
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`${errorCount} rapport(s) n'ont pas pu être envoyés`);
       }
     } catch (error) {
       console.error('Erreur:', error);
@@ -269,8 +305,10 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
     }
   };
 
-  const openModal = (rapport: RapportValide) => {
-    setSelectedRapport(rapport);
+  const openModal = (groupe: GroupeClient) => {
+    // Sélectionner le premier rapport du groupe pour l'affichage
+    setSelectedRapport(groupe.rapports[0]);
+    setSelectedGroupe(groupe);
     setIsModalOpen(true);
     setShowPreview(false);
     setSignedDocumentUrl('');
@@ -341,7 +379,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openModal(groupe.rapports[0])}
+                      onClick={() => openModal(groupe)}
                       style={{ borderColor: '#28A745', color: '#28A745' }}
                     >
                       <FileText className="h-4 w-4 mr-2" />
@@ -359,7 +397,11 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
-              <span>Rapport {selectedRapport?.code}</span>
+              <span>
+                Rapport {selectedGroupe ? 
+                  selectedGroupe.rapports.map(r => r.code).join(', ') : 
+                  selectedRapport?.code}
+              </span>
               <Button
                 variant="ghost"
                 size="sm"

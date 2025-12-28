@@ -1516,6 +1516,7 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
         """Créer un rapport marketing depuis un workflow validé"""
         workflow_id = request.data.get('workflow_id')
         signature = request.data.get('signature_directeur_snertp')
+        signed_report_data = request.data.get('signed_report_data')  # PDF signé avec bordereau
         
         if not workflow_id:
             return Response(
@@ -1537,7 +1538,8 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
             code_echantillon=workflow.code_echantillon,
             client_name=workflow.client_name,
             file_name=workflow.file_name,
-            file_data=workflow.file_data,
+            file_data=signed_report_data or workflow.file_data,  # Utiliser le PDF signé si disponible
+            signed_report_data=signed_report_data or '',  # Stocker aussi dans signed_report_data
             signature_directeur_snertp=signature or '',
             statut='en_attente'
         )
@@ -1546,6 +1548,7 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
         workflow.etape_actuelle = 'marketing'
         workflow.date_envoi_marketing = timezone.now()
         workflow.signature_directeur_snertp = signature or ''
+        workflow.file_data = signed_report_data or workflow.file_data  # Remplacer le PDF original
         workflow.save()
         
         serializer = self.get_serializer(rapport)

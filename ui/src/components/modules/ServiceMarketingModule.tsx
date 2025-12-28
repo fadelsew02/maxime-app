@@ -18,14 +18,23 @@ interface RapportMarketing {
   avisDirecteurSNERTP: string;
   signatureDirecteurSNERTP: string;
   clientEmail?: string;
+  clientId?: string;
+}
+
+interface GroupeClient {
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  rapports: RapportMarketing[];
 }
 
 export function ServiceMarketingModule() {
-  const [rapports, setRapports] = useState<RapportMarketing[]>([]);
+  const [groupesClients, setGroupesClients] = useState<GroupeClient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRapport, setSelectedRapport] = useState<RapportMarketing | null>(null);
+  const [selectedGroupe, setSelectedGroupe] = useState<GroupeClient | null>(null);
   const [emailAddress, setEmailAddress] = useState('');
   const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const loadRapports = async () => {
     setLoading(true);
@@ -41,22 +50,28 @@ export function ServiceMarketingModule() {
       
       if (response.ok) {
         const data = await response.json();
+        
+        // Charger tous les clients pour récupérer les emails
+        let clientsMap = new Map();
+        try {
+          const clientsResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          const clientsData = await clientsResponse.json();
+          clientsData.results.forEach((c: any) => {
+            clientsMap.set(c.nom, { email: c.email || '', id: c.id });
+          });
+        } catch (error) {
+          console.error('Erreur chargement clients:', error);
+        }
+        
         for (const rapport of data) {
-          let clientEmail = rapport.email_client || '';
-          
-          if (!clientEmail) {
-            try {
-              const clientsResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-              const clientsData = await clientsResponse.json();
-              const client = clientsData.results.find((c: any) => c.nom === rapport.client_name);
-              if (client) clientEmail = client.email || '';
-            } catch (error) {}
-          }
+          const clientInfo = clientsMap.get(rapport.client_name) || {};
+          const clientEmail = rapport.email_client || clientInfo.email || '';
+          const clientId = rapport.client_id || clientInfo.id || rapport.client_name;
           
           rapportsMarketing.push({
             id: rapport.id,
@@ -67,7 +82,8 @@ export function ServiceMarketingModule() {
             dateEnvoi: rapport.date_envoi_marketing,
             avisDirecteurSNERTP: rapport.avis_directeur_snertp || '',
             signatureDirecteurSNERTP: rapport.signature_directeur_snertp || '',
-            clientEmail
+            clientEmail,
+            clientId
           });
         }
       } else {
@@ -78,7 +94,23 @@ export function ServiceMarketingModule() {
       toast.error('Erreur de connexion au serveur');
     }
 
-    setRapports(rapportsMarketing);
+    // Regrouper par client_id
+    const groupesMap = new Map<string, GroupeClient>();
+    
+    rapportsMarketing.forEach(rapport => {
+      const clientId = rapport.clientId || rapport.clientName;
+      if (!groupesMap.has(clientId)) {
+        groupesMap.set(clientId, {
+          clientId,
+          clientName: rapport.clientName,
+          clientEmail: rapport.clientEmail || '',
+          rapports: []
+        });
+      }
+      groupesMap.get(clientId)!.rapports.push(rapport);
+    });
+
+    setGroupesClients(Array.from(groupesMap.values()));
     setLoading(false);
   };
 
@@ -86,43 +118,66 @@ export function ServiceMarketingModule() {
     loadRapports();
   }, []);
 
-  const handlePrepareEmail = (rapport: RapportMarketing) => {
-    setSelectedRapport(rapport);
-    setEmailAddress(rapport.clientEmail || '');
+  const handlePrepareEmail = (groupe: GroupeClient) => {
+    setSelectedGroupe(groupe);
+    setEmailAddress(groupe.clientEmail || '');
     setShowEmailDialog(true);
   };
 
   const handleEnvoyerClient = async () => {
-    if (!selectedRapport || !emailAddress) {
+    if (!selectedGroupe || !emailAddress) {
       toast.error('Adresse email requise');
       return;
     }
 
+    setIsSending(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/rapports-marketing/${selectedRapport.id}/envoyer_client/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email_client: emailAddress,
-        }),
-      });
+      let successCount = 0;
+      let errorCount = 0;
 
-      if (response.ok) {
-        toast.success(`Rapport envoyé à ${emailAddress}`);
+      // Envoyer tous les rapports du groupe
+      for (const rapport of selectedGroupe.rapports) {
+        try {
+          const response = await fetch(`http://127.0.0.1:8000/api/rapports-marketing/${rapport.id}/envoyer_client/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email_client: emailAddress,
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+            const error = await response.json();
+            console.error(`Erreur pour ${rapport.code}:`, error);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Erreur pour ${rapport.code}:`, error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} rapport(s) envoyé(s) à ${emailAddress}`);
         setShowEmailDialog(false);
-        setSelectedRapport(null);
+        setSelectedGroupe(null);
         setEmailAddress('');
         loadRapports();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Erreur lors de l\'envoi');
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`${errorCount} rapport(s) n'ont pas pu être envoyés`);
       }
     } catch (error) {
       console.error('Erreur:', error);
       toast.error('Erreur lors de l\'envoi au client');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -141,7 +196,7 @@ export function ServiceMarketingModule() {
             <div>
               <CardTitle>Rapports à envoyer</CardTitle>
               <CardDescription>
-                {rapports.length} rapport(s) en attente d'envoi
+                {groupesClients.length} rapport(s) en attente d'envoi
               </CardDescription>
             </div>
             <Button onClick={loadRapports} disabled={loading}>
@@ -156,14 +211,14 @@ export function ServiceMarketingModule() {
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                 <p className="mt-2 text-gray-500">Chargement...</p>
               </div>
-            ) : rapports.length === 0 ? (
+            ) : groupesClients.length === 0 ? (
               <div className="text-center py-12" style={{ color: '#A9A9A9' }}>
                 Aucun rapport à envoyer
               </div>
             ) : (
-              rapports.map((rapport) => (
+              groupesClients.map((groupe) => (
                 <div
-                  key={rapport.code}
+                  key={groupe.clientId}
                   className="p-4 rounded-lg border"
                   style={{ backgroundColor: '#E3F2FD', borderColor: '#2196F3' }}
                 >
@@ -174,23 +229,24 @@ export function ServiceMarketingModule() {
                           <Send className="h-3 w-3 mr-1" />
                           À envoyer
                         </Badge>
-                        <Badge style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
-                          {rapport.code}
-                        </Badge>
+                        <div className="flex gap-2">
+                          {groupe.rapports.map((rapport) => (
+                            <Badge key={rapport.code} style={{ backgroundColor: '#003366', color: '#FFFFFF' }}>
+                              {rapport.code}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                       <div className="text-sm space-y-1" style={{ color: '#1565C0' }}>
-                        <p>Client: {rapport.clientName}</p>
-                        <p>Reçu le: {new Date(rapport.dateEnvoi).toLocaleString('fr-FR')}</p>
-                        {rapport.avisDirecteurSNERTP && (
-                          <p>Avis: {rapport.avisDirecteurSNERTP}</p>
-                        )}
+                        <p>Client: {groupe.clientName}</p>
+                        <p>Reçu le: {new Date(groupe.rapports[0].dateEnvoi).toLocaleString('fr-FR')}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setSelectedRapport(rapport)}
+                        onClick={() => setSelectedGroupe(groupe)}
                         style={{ borderColor: '#2196F3', color: '#1565C0' }}
                       >
                         <FileText className="h-4 w-4 mr-2" />
@@ -198,7 +254,7 @@ export function ServiceMarketingModule() {
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => handlePrepareEmail(rapport)}
+                        onClick={() => handlePrepareEmail(groupe)}
                         style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}
                       >
                         <Mail className="h-4 w-4 mr-2" />
@@ -213,25 +269,29 @@ export function ServiceMarketingModule() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedRapport && !showEmailDialog} onOpenChange={() => setSelectedRapport(null)}>
+      <Dialog open={!!selectedGroupe && !showEmailDialog} onOpenChange={() => setSelectedGroupe(null)}>
         <DialogContent style={{ maxWidth: '90vw', width: '90vw', maxHeight: '90vh' }}>
           <DialogHeader>
-            <DialogTitle>Rapport Signé - {selectedRapport?.code}</DialogTitle>
+            <DialogTitle>
+              Rapport Signé - {selectedGroupe?.rapports.map(r => r.code).join(', ')}
+            </DialogTitle>
           </DialogHeader>
-          {selectedRapport && (
+          {selectedGroupe && (
             <div className="space-y-4">
               <div className="border rounded-lg" style={{ height: '70vh', overflow: 'auto', backgroundColor: '#FFFFFF' }}>
                 <div style={{ padding: '20px' }}>
                   <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #003366', paddingBottom: '15px' }}>
                     <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#003366' }}>Rapport d'Essai</h2>
-                    <p style={{ fontSize: '16px', marginTop: '5px' }}><strong>Code:</strong> {selectedRapport.code}</p>
-                    <p style={{ fontSize: '16px' }}><strong>Client:</strong> {selectedRapport.clientName}</p>
+                    <p style={{ fontSize: '16px', marginTop: '5px' }}>
+                      <strong>Codes:</strong> {selectedGroupe.rapports.map(r => r.code).join(', ')}
+                    </p>
+                    <p style={{ fontSize: '16px' }}><strong>Client:</strong> {selectedGroupe.clientName}</p>
                   </div>
 
-                  {selectedRapport.fileData && (
+                  {selectedGroupe.rapports[0].fileData && (
                     <div style={{ marginBottom: '20px', border: '2px solid #003366', borderRadius: '8px' }}>
                       <iframe
-                        src={selectedRapport.fileData}
+                        src={selectedGroupe.rapports[0].fileData}
                         style={{ width: '100%', height: '500px', border: 'none' }}
                         title="Rapport PDF"
                       />
@@ -240,14 +300,13 @@ export function ServiceMarketingModule() {
 
                   <div style={{ borderTop: '2px solid #003366', paddingTop: '20px', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px' }}>
                     <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '15px' }}>Signature du Directeur SNERTP</h3>
-                    <p style={{ fontSize: '14px', marginBottom: '10px' }}><strong>Date:</strong> {new Date(selectedRapport.dateEnvoi).toLocaleString('fr-FR')}</p>
-                    {selectedRapport.avisDirecteurSNERTP && (
-                      <p style={{ fontSize: '14px', marginBottom: '15px' }}><strong>Avis:</strong> {selectedRapport.avisDirecteurSNERTP}</p>
-                    )}
-                    {selectedRapport.signatureDirecteurSNERTP && (
+                    <p style={{ fontSize: '14px', marginBottom: '10px' }}>
+                      <strong>Date:</strong> {new Date(selectedGroupe.rapports[0].dateEnvoi).toLocaleString('fr-FR')}
+                    </p>
+                    {selectedGroupe.rapports[0].signatureDirecteurSNERTP && (
                       <div style={{ marginTop: '15px' }}>
                         <img 
-                          src={selectedRapport.signatureDirecteurSNERTP} 
+                          src={selectedGroupe.rapports[0].signatureDirecteurSNERTP} 
                           alt="Signature" 
                           style={{ maxWidth: '300px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff', padding: '10px' }}
                         />
@@ -261,42 +320,16 @@ export function ServiceMarketingModule() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    const signedHtml = `
-                      <!DOCTYPE html>
-                      <html>
-                        <head>
-                          <title>Rapport Signé - ${selectedRapport.code}</title>
-                          <style>body { margin: 0; padding: 20px; font-family: Arial; }</style>
-                        </head>
-                        <body>
-                          <div style="max-width: 900px; margin: 0 auto;">
-                            <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #003366; padding-bottom: 15px;">
-                              <h2>Rapport d'Essai - ${selectedRapport.code}</h2>
-                              <p>Client: ${selectedRapport.clientName}</p>
-                            </div>
-                            <div style="border: 2px solid #003366; margin-bottom: 20px;">
-                              <iframe src="${selectedRapport.fileData}" width="100%" height="600px"></iframe>
-                            </div>
-                            <div style="border-top: 2px solid #003366; padding: 20px; background: #f9f9f9;">
-                              <h3>Signature du Directeur SNERTP</h3>
-                              <p>Date: ${new Date(selectedRapport.dateEnvoi).toLocaleString('fr-FR')}</p>
-                              ${selectedRapport.avisDirecteurSNERTP ? `<p>Avis: ${selectedRapport.avisDirecteurSNERTP}</p>` : ''}
-                              ${selectedRapport.signatureDirecteurSNERTP ? `<img src="${selectedRapport.signatureDirecteurSNERTP}" style="max-width: 300px; border: 1px solid #ccc;" />` : ''}
-                            </div>
-                          </div>
-                        </body>
-                      </html>
-                    `;
-                    const blob = new Blob([signedHtml], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank');
+                    if (selectedGroupe.rapports[0].fileData) {
+                      window.open(selectedGroupe.rapports[0].fileData, '_blank');
+                    }
                   }}
                 >
                   Ouvrir en plein écran
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setSelectedRapport(null)}
+                  onClick={() => setSelectedGroupe(null)}
                 >
                   Fermer
                 </Button>
@@ -314,11 +347,13 @@ export function ServiceMarketingModule() {
           <div className="space-y-4">
             <div>
               <Label>Client</Label>
-              <p className="text-sm font-medium mt-1">{selectedRapport?.clientName}</p>
+              <p className="text-sm font-medium mt-1">{selectedGroupe?.clientName}</p>
             </div>
             <div>
-              <Label>Code échantillon</Label>
-              <p className="text-sm font-medium mt-1">{selectedRapport?.code}</p>
+              <Label>Codes échantillons</Label>
+              <p className="text-sm font-medium mt-1">
+                {selectedGroupe?.rapports.map(r => r.code).join(', ')}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Adresse email</Label>
@@ -343,10 +378,10 @@ export function ServiceMarketingModule() {
               <Button
                 style={{ backgroundColor: '#28A745', color: '#FFFFFF' }}
                 onClick={handleEnvoyerClient}
-                disabled={!emailAddress}
+                disabled={!emailAddress || isSending}
               >
                 <Send className="h-4 w-4 mr-2" />
-                Envoyer
+                {isSending ? 'Envoi...' : 'Envoyer'}
               </Button>
             </div>
           </div>

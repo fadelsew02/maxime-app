@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { FileText, Send, CheckCircle, Mail } from 'lucide-react';
+import { FileText, Send, CheckCircle, Mail, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface RapportMarketing {
@@ -320,7 +320,25 @@ export function ServiceMarketingModule() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (selectedGroupe.rapports[0].fileData) {
+                    if (selectedGroupe && selectedGroupe.rapports[0].fileData) {
+                      // Ouvrir dans une nouvelle fenêtre et déclencher l'impression
+                      const printWindow = window.open(selectedGroupe.rapports[0].fileData, '_blank');
+                      if (printWindow) {
+                        printWindow.onload = () => {
+                          printWindow.print();
+                        };
+                      }
+                    }
+                  }}
+                  style={{ borderColor: '#003366', color: '#003366' }}
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimer
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedGroupe && selectedGroupe.rapports[0].fileData) {
                       window.open(selectedGroupe.rapports[0].fileData, '_blank');
                     }
                   }}

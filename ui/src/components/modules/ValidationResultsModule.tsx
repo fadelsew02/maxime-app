@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { CheckCircle, FileText, X, Eraser, Send } from 'lucide-react';
+import { CheckCircle, FileText, X, Eraser, Send, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -498,6 +498,24 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
                   </Button>
                 ) : (
                   <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (signedDocumentUrl) {
+                          // Ouvrir dans une nouvelle fenêtre et déclencher l'impression
+                          const printWindow = window.open(signedDocumentUrl, '_blank');
+                          if (printWindow) {
+                            printWindow.onload = () => {
+                              printWindow.print();
+                            };
+                          }
+                        }
+                      }}
+                      style={{ borderColor: '#003366', color: '#003366' }}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Imprimer
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() => {

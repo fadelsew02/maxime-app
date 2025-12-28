@@ -1556,7 +1556,7 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def envoyer_client(self, request, pk=None):
-        """Marquer le rapport comme envoyé au client"""
+        """Envoyer le rapport au client par email avec PDF en pièce jointe"""
         rapport = self.get_object()
         email_client = request.data.get('email_client')
         
@@ -1566,6 +1566,61 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Préparer l'email
+        from django.core.mail import EmailMessage
+        from django.conf import settings
+        import base64
+        
+        subject = f'Rapport d\'essai SNERTP - {rapport.code_echantillon}'
+        message = f"""
+Bonjour,
+
+Veuillez trouver ci-joint le rapport d'essai pour l'échantillon {rapport.code_echantillon}.
+
+Client: {rapport.client_name}
+Date: {rapport.date_envoi_marketing.strftime('%d/%m/%Y %H:%M') if rapport.date_envoi_marketing else 'N/A'}
+
+Cordialement,
+Service Marketing - SNERTP
+Centre National d'Essais et de Recherches des Travaux Publics
+        """
+        
+        email = EmailMessage(
+            subject=subject,
+            body=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email_client],
+        )
+        
+        # Attacher le PDF si disponible
+        if rapport.file_data:
+            try:
+                # Extraire le PDF du base64
+                if rapport.file_data.startswith('data:'):
+                    # Format: data:application/pdf;base64,<data>
+                    pdf_data = rapport.file_data.split(',')[1]
+                else:
+                    pdf_data = rapport.file_data
+                
+                pdf_bytes = base64.b64decode(pdf_data)
+                email.attach(
+                    f'Rapport_{rapport.code_echantillon}.pdf',
+                    pdf_bytes,
+                    'application/pdf'
+                )
+            except Exception as e:
+                print(f"Erreur lors de l'attachement du PDF: {e}")
+        
+        # Envoyer l'email
+        try:
+            email.send(fail_silently=False)
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de l\'envoi de l\'email: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Mettre à jour le statut
         rapport.statut = 'envoye'
         rapport.email_client = email_client
         rapport.date_envoi_client = timezone.now()
@@ -1582,7 +1637,11 @@ class RapportMarketingViewSet(viewsets.ModelViewSet):
             workflow.save()
         
         serializer = self.get_serializer(rapport)
-        return Response(serializer.data)
+        return Response({
+            'status': 'success',
+            'message': f'Email envoyé à {email_client}',
+            'rapport': serializer.data
+        })
 """
 Views pour les logs d'actions
 """

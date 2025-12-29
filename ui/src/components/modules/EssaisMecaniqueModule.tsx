@@ -54,7 +54,7 @@ export function EssaisMecaniqueModule() {
       setLoading(true);
       
       // Utiliser l'endpoint backend qui filtre les échantillons avec essais mécaniques envoyés
-      const response = await fetch('http://127.0.0.1:8000/api/echantillons/with_essais_meca_envoyes/', {
+      const response = await fetch('https://snertp.onrender.com/api/echantillons/with_essais_meca_envoyes/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -231,7 +231,7 @@ function EchantillonCard({ echantillon, onUpdate, echantillons }: { echantillon:
       const echantillonsAvant = echantillons.slice(0, echantillonIndex);
       
       // Vérifier si l'essai actuel est rejeté (prioritaire)
-      const essaiActuelResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echantillon.id}&type=${essaiType}`, {
+      const essaiActuelResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echantillon.id}&type=${essaiType}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -251,7 +251,7 @@ function EchantillonCard({ echantillon, onUpdate, echantillons }: { echantillon:
           if (echAvant.essaisRoute.includes(essaiType)) {
             // Charger les essais de cet échantillon
             try {
-              const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echAvant.id}&type=${essaiType}`, {
+              const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echAvant.id}&type=${essaiType}`, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
                   'Content-Type': 'application/json',
@@ -839,7 +839,7 @@ function EssaiForm({ echantillon, essaiType, onClose }: { echantillon: Echantill
                   });
                   
                   // Mettre à jour le statut de l'échantillon pour la décodification
-                  await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+                  await fetch(`https://snertp.onrender.com/api/echantillons/${echantillon.id}/`, {
                     method: 'PATCH',
                     headers: {
                       'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

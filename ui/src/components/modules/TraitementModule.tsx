@@ -194,7 +194,7 @@ export function TraitementModule() {
     setLoading(true);
     try {
       console.log('\n🔍 Chargement module Traitement...');
-      const response = await fetch('http://127.0.0.1:8000/api/echantillons/traitement_groupes_par_client/', {
+      const response = await fetch('https://snertp.onrender.com/api/echantillons/traitement_groupes_par_client/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -358,7 +358,7 @@ function ClientDetails({ client, onClose, onSent }: { client: ClientGroupe; onCl
 
         try {
           for (const echantillon of client.echantillons) {
-            const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${echantillon.code}`, {
+            const echantillonResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${echantillon.code}`, {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('access_token')}`
               }

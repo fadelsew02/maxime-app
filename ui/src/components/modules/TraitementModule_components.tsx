@@ -68,7 +68,7 @@ export function EchantillonDetails({ echantillon, onBack }: { echantillon: Echan
   const loadEchantillonsClient = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/echantillons/?client_nom=${encodeURIComponent(echantillon.clientNom)}`, {
+      const response = await fetch(`https://snertp.onrender.com/api/echantillons/?client_nom=${encodeURIComponent(echantillon.clientNom)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ export function EchantillonDetails({ echantillon, onBack }: { echantillon: Echan
       // Charger le nombre d'essais pour chaque échantillon
       const echantillonsAvecEssais = await Promise.all(
         data.results.map(async (ech: any) => {
-          const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${ech.id}`, {
+          const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${ech.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             },
@@ -111,7 +111,7 @@ export function EchantillonDetails({ echantillon, onBack }: { echantillon: Echan
     setLoading(true);
     try {
       // Récupérer tous les workflows pour ce client
-      const response = await fetch(`http://127.0.0.1:8000/api/echantillons/?client_nom=${encodeURIComponent(echantillon.clientNom)}`, {
+      const response = await fetch(`https://snertp.onrender.com/api/echantillons/?client_nom=${encodeURIComponent(echantillon.clientNom)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -514,7 +514,7 @@ function EssaiDetails({ essai, onBack }: { essai: EssaiTraitement; onBack: () =>
               variant="outline"
               size="sm"
               onClick={() => {
-                const fichierUrl = essai.fichier.startsWith('http') ? essai.fichier : `http://127.0.0.1:8000${essai.fichier}`;
+                const fichierUrl = essai.fichier.startsWith('http') ? essai.fichier : `https://snertp.onrender.com${essai.fichier}`;
                 window.open(fichierUrl, '_blank');
                 toast.success(`Consultation de ${essai.fichier}`);
               }}

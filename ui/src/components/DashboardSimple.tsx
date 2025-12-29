@@ -87,7 +87,7 @@ export function DashboardSimple({ user }: DashboardSimpleProps) {
               <p className="font-semibold">Erreur de chargement</p>
               <p className="text-sm mt-2">{error}</p>
               <p className="text-xs mt-4 text-gray-500">
-                Vérifiez que le backend est démarré sur http://127.0.0.1:8000
+                Vérifiez que le backend est démarré sur https://snertp.onrender.com
               </p>
             </div>
           </CardContent>

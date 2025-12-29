@@ -357,7 +357,7 @@ function EchantillonDetails({ echantillon, onUpdate, onClose }: {
                   toast.error('Session expirée, veuillez vous reconnecter');
                   return;
                 }
-                const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+                const response = await fetch(`https://snertp.onrender.com/api/echantillons/${echantillon.id}/`, {
                   method: 'PATCH',
                   headers: {
                     'Authorization': `Bearer ${token}`,
@@ -421,7 +421,7 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/users/me/', {
+        const response = await fetch('https://snertp.onrender.com/api/users/me/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           },
@@ -488,7 +488,7 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
             console.error('❌ Pas de token d\'authentification');
             return;
           }
-          const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+          const response = await fetch(`https://snertp.onrender.com/api/echantillons/${echantillon.id}/`, {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -546,7 +546,7 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
                       toast.error('Session expirée, veuillez vous reconnecter');
                       return;
                     }
-                    const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+                    const response = await fetch(`https://snertp.onrender.com/api/echantillons/${echantillon.id}/`, {
                       method: 'PATCH',
                       headers: {
                         'Authorization': `Bearer ${token}`,
@@ -729,7 +729,7 @@ function EssaiDetailsView({ essai, onBack, onUpdate, echantillon }: {
                   onClick={() => {
                     const fichierUrl = essai.fichier.startsWith('http') 
                       ? essai.fichier 
-                      : `http://127.0.0.1:8000${essai.fichier}`;
+                      : `https://snertp.onrender.com${essai.fichier}`;
                     window.open(fichierUrl, '_blank');
                     toast.success('Ouverture du fichier');
                   }}

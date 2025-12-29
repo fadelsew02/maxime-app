@@ -87,7 +87,7 @@ export function ChefProjetModule() {
       let clientName = workflow.client_name || '-';
       
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${code}`, {
+        const response = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${code}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -121,7 +121,7 @@ export function ChefProjetModule() {
       };
       
       try {
-        const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${code}`, {
+        const echantillonResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${code}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ export function ChefProjetModule() {
         const echantillon = echantillonData.results[0];
         
         if (echantillon) {
-          const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echantillon.id}`, {
+          const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echantillon.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',
@@ -334,7 +334,7 @@ function EchantillonDetails({ echantillon, onClose }: { echantillon: Echantillon
           }
         }
         
-        const echResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${echantillon.code}`, {
+        const echResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${echantillon.code}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
         });
         const echData = await echResponse.json();
@@ -342,7 +342,7 @@ function EchantillonDetails({ echantillon, onClose }: { echantillon: Echantillon
         console.log('Échantillon actuel:', currentEch);
         
         if (currentEch?.client_nom) {
-          const clientEchResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?client_nom=${encodeURIComponent(currentEch.client_nom)}`, {
+          const clientEchResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?client_nom=${encodeURIComponent(currentEch.client_nom)}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           const clientEchData = await clientEchResponse.json();
@@ -527,7 +527,7 @@ function RapportValidation({ echantillon, onClose, workflowStatus, onStatusChang
     const workflow = await workflowApi.getByCode(echantillon.code);
     if (workflow?.id) {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/workflows/${workflow.id}/`, {
+        const response = await fetch(`https://snertp.onrender.com/api/workflows/${workflow.id}/`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

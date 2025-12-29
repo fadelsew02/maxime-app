@@ -337,7 +337,7 @@ function EchantillonForm({ refreshTrigger }: EchantillonFormProps) {
       console.log('📅 Date retour calculée:', dateRetourFormatted, '(durée max:', dureeMax, 'jours)');
       
       // Mettre à jour l'échantillon avec la date de retour
-      const updateResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/${echantillon.id}/`, {
+      const updateResponse = await fetch(`https://snertp.onrender.com/api/echantillons/${echantillon.id}/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -358,7 +358,7 @@ function EchantillonForm({ refreshTrigger }: EchantillonFormProps) {
       if (echantillon.photo) {
         photoUrl = echantillon.photo.startsWith('http') 
           ? echantillon.photo 
-          : `http://127.0.0.1:8000${echantillon.photo}`;
+          : `https://snertp.onrender.com${echantillon.photo}`;
       }
 
       // Créer la liste de données pour le QR code

@@ -12,7 +12,7 @@ function DirecteurSNERTPDashboard() {
   React.useEffect(() => {
     const loadEchantillons = async () => {
       try {
-        const workflowResponse = await fetch('http://127.0.0.1:8000/api/workflows/?etape_actuelle=directeur_snertp&statut=en_attente', {
+        const workflowResponse = await fetch('https://snertp.onrender.com/api/workflows/?etape_actuelle=directeur_snertp&statut=en_attente', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -30,13 +30,13 @@ function DirecteurSNERTPDashboard() {
         const echantillonIds = workflowData.results.map((w: any) => w.echantillon);
         
         const [echResponse, rapportResponse] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/echantillons/', {
+          fetch('https://snertp.onrender.com/api/echantillons/', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',
             },
           }),
-          fetch('http://127.0.0.1:8000/api/rapports/', {
+          fetch('https://snertp.onrender.com/api/rapports/', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',

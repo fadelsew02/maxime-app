@@ -20,7 +20,7 @@ pip install Django djangorestframework django-cors-headers python-decouple djang
 python manage.py runserver
 ```
 
-Le backend sera accessible sur : http://127.0.0.1:8000/
+Le backend sera accessible sur : https://snertp.onrender.com/
 
 ### 2. Démarrer le Frontend (React)
 
@@ -61,9 +61,9 @@ Puis exécutez : `start.bat`
 ## URLs importantes
 
 - **Frontend** : http://localhost:3000/
-- **Backend API** : http://127.0.0.1:8000/
-- **Admin Django** : http://127.0.0.1:8000/admin/
-- **Documentation API** : http://127.0.0.1:8000/swagger/
+- **Backend API** : https://snertp.onrender.com/
+- **Admin Django** : https://snertp.onrender.com/admin/
+- **Documentation API** : https://snertp.onrender.com/swagger/
 
 ## Résolution du problème de date CLI-015
 

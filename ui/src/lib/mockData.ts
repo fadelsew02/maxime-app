@@ -64,7 +64,7 @@ let essais: EssaiTest[] = [];
 // Service de données - utilise uniquement le backend
 export const getClients = async (): Promise<Client[]> => {
   try {
-    const response = await fetch('http://127.0.0.1:8000/api/clients/', {
+    const response = await fetch('https://snertp.onrender.com/api/clients/', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
@@ -85,7 +85,7 @@ export const getClient = async (code: string): Promise<Client | undefined> => {
 
 export const addClient = async (client: Client): Promise<Client | null> => {
   try {
-    const response = await fetch('http://127.0.0.1:8000/api/clients/', {
+    const response = await fetch('https://snertp.onrender.com/api/clients/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -102,7 +102,7 @@ export const addClient = async (client: Client): Promise<Client | null> => {
 
 export const getEchantillons = async (): Promise<Echantillon[]> => {
   try {
-    const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+    const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
@@ -143,7 +143,7 @@ export const getEchantillonsByClient = async (clientCode: string): Promise<Echan
 
 export const addEchantillon = async (echantillon: Echantillon): Promise<Echantillon | null> => {
   try {
-    const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+    const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -160,7 +160,7 @@ export const addEchantillon = async (echantillon: Echantillon): Promise<Echantil
 
 export const updateEchantillon = async (code: string, updates: Partial<Echantillon>): Promise<Echantillon | null> => {
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/echantillons/${code}/`, {
+    const response = await fetch(`https://snertp.onrender.com/api/echantillons/${code}/`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

@@ -2,7 +2,7 @@
  * Helper pour vérifier la capacité des sections et bloquer si nécessaire
  */
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_BASE_URL = 'https://snertp.onrender.com/api';
 
 export async function verifierCapacite(typeEssai: string, dateEnvoi: string): Promise<{
   disponible: boolean;

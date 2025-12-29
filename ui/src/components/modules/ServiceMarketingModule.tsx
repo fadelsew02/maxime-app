@@ -41,7 +41,7 @@ export function ServiceMarketingModule() {
     const rapportsMarketing: RapportMarketing[] = [];
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/rapports-marketing/en_attente/', {
+      const response = await fetch('https://snertp.onrender.com/api/rapports-marketing/en_attente/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -54,7 +54,7 @@ export function ServiceMarketingModule() {
         // Charger tous les clients pour récupérer les emails
         let clientsMap = new Map();
         try {
-          const clientsResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
+          const clientsResponse = await fetch('https://snertp.onrender.com/api/clients/', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ export function ServiceMarketingModule() {
       // Envoyer tous les rapports du groupe
       for (const rapport of selectedGroupe.rapports) {
         try {
-          const response = await fetch(`http://127.0.0.1:8000/api/rapports-marketing/${rapport.id}/envoyer_client/`, {
+          const response = await fetch(`https://snertp.onrender.com/api/rapports-marketing/${rapport.id}/envoyer_client/`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

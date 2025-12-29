@@ -14,7 +14,7 @@ export function ChefProjetRejeteModule() {
   const loadEssaisRejetes = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/workflows/?etape_actuelle=chef_projet&statut=rejected', {
+      const response = await fetch('https://snertp.onrender.com/api/workflows/?etape_actuelle=chef_projet&statut=rejected', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',

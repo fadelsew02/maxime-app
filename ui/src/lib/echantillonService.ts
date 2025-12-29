@@ -89,7 +89,7 @@ export const createEchantillon = async (data: EchantillonCreate, photoFile?: Fil
       throw new Error('Non authentifié. Veuillez vous reconnecter.');
     }
     
-    const response = await fetch(`http://127.0.0.1:8000/api/echantillons/`, {
+    const response = await fetch(`https://snertp.onrender.com/api/echantillons/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

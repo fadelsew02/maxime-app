@@ -88,7 +88,7 @@ function ajouterJoursOuvrables(dateDebut: Date, nombreJours: number): Date {
 // Fonction pour compter les échantillons en attente par type d'essai depuis l'API
 async function compterEchantillonsEnAttente(): Promise<Record<string, number>> {
   try {
-    const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+    const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
@@ -257,7 +257,7 @@ export function DashboardHome({ user }: DashboardHomeProps) {
     if (user.role === 'directeur_technique') {
       const loadEchantillons = async () => {
         try {
-          const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+          const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',
@@ -666,7 +666,7 @@ function MecaDashboard() {
   React.useEffect(() => {
     const loadEchantillons = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+        const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -682,7 +682,7 @@ function MecaDashboard() {
         const echantillonsAvecEssais = await Promise.all(
           echantillonsMeca.map(async (ech: any) => {
             try {
-              const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${ech.id}`, {
+              const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${ech.id}`, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
                   'Content-Type': 'application/json',
@@ -725,7 +725,7 @@ function MecaDashboard() {
 
   const getEssaiInfo = async (echantillonId: string, type: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echantillonId}&type=${type}`, {
+      const response = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echantillonId}&type=${type}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -808,7 +808,7 @@ function DirecteurTechniqueDashboard() {
   const loadEchantillons = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+      const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -974,7 +974,7 @@ function ChefServiceDashboard() {
   const loadEchantillons = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+      const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -1138,7 +1138,7 @@ function ChefProjetDashboard() {
   React.useEffect(() => {
     const loadEchantillons = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+        const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -1286,7 +1286,7 @@ function EssaiRouteCell({ echantillonId, type, dateEnvoi, echantillonStatut }: {
   React.useEffect(() => {
     const loadEssaiInfo = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echantillonId}&type=${type}`, {
+        const response = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echantillonId}&type=${type}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -1362,7 +1362,7 @@ function RouteDashboard() {
   React.useEffect(() => {
     const loadEchantillons = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+        const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -1551,7 +1551,7 @@ function TraitementDashboard() {
   React.useEffect(() => {
     const loadEchantillons = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+        const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -1693,7 +1693,7 @@ function DirecteurSNERTPHome() {
   const loadEchantillons = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+      const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -1908,7 +1908,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
   React.useEffect(() => {
     const loadData = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+        const response = await fetch('https://snertp.onrender.com/api/echantillons/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -2451,7 +2451,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8">
-                                  <QRCode value={`Code: ${ech.code}\nNature: ${ech.nature}\nProfondeurs: ${ech.profondeurDebut}m - ${ech.profondeurFin}m\nNappe phréatique: ${ech.nappe ? ech.nappe + ' m' : 'Non renseignée'}\nType de sondage: ${ech.sondage === 'carotte' ? 'Carotté' : 'Vrac'}\nEssais demandés: ${(ech.essais || []).join(', ')}\nEnvoi prévu pour: ${simulerIADateEnvoi(ech).date}\nDurée en attente de stock: ${simulerIADateEnvoi(ech).delaiJours} jours\nDate de retour essai: ${simulerIADateEnvoi(ech).dateRetour}${ech.photo ? '\nTélécharger photo: http://127.0.0.1:8000' + ech.photo : ''}`} size={32} />
+                                  <QRCode value={`Code: ${ech.code}\nNature: ${ech.nature}\nProfondeurs: ${ech.profondeurDebut}m - ${ech.profondeurFin}m\nNappe phréatique: ${ech.nappe ? ech.nappe + ' m' : 'Non renseignée'}\nType de sondage: ${ech.sondage === 'carotte' ? 'Carotté' : 'Vrac'}\nEssais demandés: ${(ech.essais || []).join(', ')}\nEnvoi prévu pour: ${simulerIADateEnvoi(ech).date}\nDurée en attente de stock: ${simulerIADateEnvoi(ech).delaiJours} jours\nDate de retour essai: ${simulerIADateEnvoi(ech).dateRetour}${ech.photo ? '\nTélécharger photo: https://snertp.onrender.com' + ech.photo : ''}`} size={32} />
                                 </div>
                                 <span className="text-xs" style={{ color: '#A9A9A9' }}>
                                   {ech.qrCode}

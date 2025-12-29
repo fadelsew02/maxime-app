@@ -284,7 +284,7 @@ function EssaiRejeteForm({ essai, onClose }: { essai: any; onClose: () => void }
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/essais/${essai.id}/`, {
+      const response = await fetch(`https://snertp.onrender.com/api/essais/${essai.id}/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -319,7 +319,7 @@ function EssaiRejeteForm({ essai, onClose }: { essai: any; onClose: () => void }
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/essais/${essai.id}/`, {
+      const response = await fetch(`https://snertp.onrender.com/api/essais/${essai.id}/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

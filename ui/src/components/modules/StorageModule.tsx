@@ -363,7 +363,7 @@ export function StorageModule() {
 
       // Vérifier la capacité du laboratoire pour ce type d'essai à cette date
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/capacites/check/?type_essai=${essaiType}&date=${dateEnvoiStr}`, {
+        const response = await fetch(`https://snertp.onrender.com/api/capacites/check/?type_essai=${essaiType}&date=${dateEnvoiStr}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -574,7 +574,7 @@ export function StorageModule() {
                                 // Sinon, calculer la prochaine date disponible via l'API
                                 try {
                                   const response = await fetch(
-                                    `http://127.0.0.1:8000/api/capacites/prochaine_date_disponible/?type_essai=${essaiType}`,
+                                    `https://snertp.onrender.com/api/capacites/prochaine_date_disponible/?type_essai=${essaiType}`,
                                     {
                                       headers: {
                                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

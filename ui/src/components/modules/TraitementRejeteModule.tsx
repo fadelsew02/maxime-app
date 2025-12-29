@@ -12,7 +12,7 @@ export function TraitementRejeteModule() {
   const loadEssaisRejetes = async () => {
     setLoading(true);
     try {
-      const workflowsResponse = await fetch('http://127.0.0.1:8000/api/workflows/', {
+      const workflowsResponse = await fetch('https://snertp.onrender.com/api/workflows/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -40,7 +40,7 @@ export function TraitementRejeteModule() {
       const clientsMap = new Map<string, any>();
       
       for (const [code, workflow] of rejetesParCode.entries()) {
-        const echResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${code}`, {
+        const echResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${code}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',

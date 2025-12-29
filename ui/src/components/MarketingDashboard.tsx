@@ -30,7 +30,7 @@ export function MarketingDashboard() {
               let dateRetour = '-';
 
               try {
-                const clientsResponse = await fetch('http://127.0.0.1:8000/api/clients/', {
+                const clientsResponse = await fetch('https://snertp.onrender.com/api/clients/', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
                     'Content-Type': 'application/json',
@@ -55,7 +55,7 @@ export function MarketingDashboard() {
               }
 
               try {
-                const echResponse = await fetch('http://127.0.0.1:8000/api/echantillons/', {
+                const echResponse = await fetch('https://snertp.onrender.com/api/echantillons/', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
                     'Content-Type': 'application/json',

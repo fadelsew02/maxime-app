@@ -85,7 +85,7 @@ export function ChefProjetModule() {
       };
       
       try {
-        const echantillonResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${code}`, {
+        const echantillonResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${code}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ export function ChefProjetModule() {
         const echantillon = echantillonData.results[0];
         
         if (echantillon) {
-          const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon=${echantillon.id}`, {
+          const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon=${echantillon.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json',
@@ -265,14 +265,14 @@ function ClientDetails({ client, onClose }: { client: ClientGroupe; onClose: () 
   useEffect(() => {
     const loadAllEchantillons = async () => {
       try {
-        const firstEchResponse = await fetch(`http://127.0.0.1:8000/api/echantillons/?code=${client.echantillons[0].code}`, {
+        const firstEchResponse = await fetch(`https://snertp.onrender.com/api/echantillons/?code=${client.echantillons[0].code}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
         });
         const firstEchData = await firstEchResponse.json();
         const firstEch = firstEchData.results?.[0];
         
         if (firstEch?.client) {
-          const response = await fetch(`http://127.0.0.1:8000/api/echantillons/?client=${firstEch.client}`, {
+          const response = await fetch(`https://snertp.onrender.com/api/echantillons/?client=${firstEch.client}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           const data = await response.json();

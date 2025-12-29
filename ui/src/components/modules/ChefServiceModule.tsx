@@ -69,7 +69,7 @@ export function ChefServiceModule() {
 
       const essais: EssaiResult[] = [];
       try {
-        const essaisResponse = await fetch(`http://127.0.0.1:8000/api/essais/?echantillon_code=${code}&statut_validation=accepted`, {
+        const essaisResponse = await fetch(`https://snertp.onrender.com/api/essais/?echantillon_code=${code}&statut_validation=accepted`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',

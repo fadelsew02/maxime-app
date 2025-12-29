@@ -88,7 +88,7 @@ export function ValidationModule({ userRole }: ValidationModuleProps) {
       
       // Charger les rapports validés
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/workflows/', {
+        const response = await fetch('https://snertp.onrender.com/api/workflows/', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json',

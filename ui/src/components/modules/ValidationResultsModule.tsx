@@ -56,7 +56,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
     const rapports: RapportValide[] = [];
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/workflows/', {
+      const response = await fetch('https://snertp.onrender.com/api/workflows/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
 
   const loadCurrentUser = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/users/me/', {
+      const response = await fetch('https://snertp.onrender.com/api/users/me/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -260,7 +260,7 @@ export function ValidationResultsModule({ userRole }: ValidationResultsModulePro
 
       for (const rapport of selectedGroupe.rapports) {
         try {
-          const response = await fetch('http://127.0.0.1:8000/api/rapports-marketing/create_from_workflow/', {
+          const response = await fetch('https://snertp.onrender.com/api/rapports-marketing/create_from_workflow/', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

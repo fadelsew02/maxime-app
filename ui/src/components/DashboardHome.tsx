@@ -1949,9 +1949,6 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
     loadData();
   }, []);
 
-  const handleSearch = () => {
-    if (!searchQuery) return;
-
   const handleSearch = async () => {
     if (!searchQuery) return;
 
@@ -2006,7 +2003,6 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
       const client = echantillon ? clients.find(c => c.code === echantillon.clientCode) : null;
       setResults({ type: 'echantillon', data: echantillon, client });
     }
-  };
   };
 
   // Composant pour afficher la prédiction de date d'envoi et retour

@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon, Send, AlertTriangle, RefreshCw } from 'lucide-react';
+import { CalendarIcon, Send, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEchantillons, updateEchantillon, addEssai, Echantillon as MockEchantillon, calculateReturnDate } from '../../lib/mockData';
 import { getEchantillonsByStatut, Echantillon as APIEchantillon, updateEchantillon as updateAPIEchantillon, changeEchantillonStatut } from '../../lib/echantillonService';

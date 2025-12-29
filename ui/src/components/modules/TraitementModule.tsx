@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { FileText, Upload, Send, CheckCircle, Loader2 } from 'lucide-react';
+import { FileText, Upload, Send, CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { workflowApi } from '../../lib/workflowApi';
 import { EchantillonDetails } from './TraitementModule_components';

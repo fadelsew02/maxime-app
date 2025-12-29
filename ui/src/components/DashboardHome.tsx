@@ -17,6 +17,7 @@ import * as React from 'react';
 import { getClients, getEchantillons, getEchantillon, getEchantillonsByClient, getClient, getEssais, Client, Echantillon } from '../lib/mockData';
 import DirecteurSNERTPDashboard from './DirecteurSNERTPDashboard';
 import { SyncButton } from './SyncButton';
+import { MEDIA_URL } from '../lib/api';
 
 
 interface DashboardHomeProps {
@@ -2047,6 +2048,8 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
               : Math.floor(chargeActuelle / capacite);
             const dureeEssai = dureesEssais[essai] || 0;
             
+            console.log(`📊 ${essai}: charge=${chargeActuelle}, capacité=${capacite}, délai=${delaiEssai}j`);
+            
             // Calculer la date d'envoi pour cet essai
             const aujourdHui = new Date();
             const dateEnvoiEssai = ajouterJoursOuvrables(aujourdHui, delaiEssai);
@@ -2065,7 +2068,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold">{essai}</span>
                     <span className="text-xs" style={{ color: '#6C757D' }}>
-                      Délai: {delaiEssai} jour(s)
+                      Charge: {chargeActuelle} | Délai: {delaiEssai} jour(s)
                     </span>
                   </div>
                   <div className="text-xs" style={{ color: '#495057' }}>
@@ -2210,7 +2213,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                 
                 {dateFilter === 'custom' && (
                   <>
-                    <div className="space-y-2">
+                    <div className="space-y-2" style={{ display: 'none' }}>
                       <Label>Date début</Label>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -2219,12 +2222,12 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                             {dateDebut ? format(dateDebut, 'PPP', { locale: fr }) : 'Sélectionner'}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
+                        <PopoverContent className="w-auto p-0 z-50">
                           <Calendar mode="single" selected={dateDebut} onSelect={setDateDebut} initialFocus />
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2" style={{ display: 'none' }}>
                       <Label>Date fin</Label>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -2233,7 +2236,7 @@ function ReceptionnisteHome({ stats }: { stats: { enAttente: number; enCours: nu
                             {dateFin ? format(dateFin, 'PPP', { locale: fr }) : 'Sélectionner'}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
+                        <PopoverContent className="w-auto p-0 z-50">
                           <Calendar mode="single" selected={dateFin} onSelect={setDateFin} initialFocus />
                         </PopoverContent>
                       </Popover>

@@ -1,5 +1,6 @@
 // Configuration de l'API
 const API_BASE_URL = 'https://snertp.onrender.com/api';
+export const MEDIA_URL = 'https://snertp.onrender.com';
 
 // Récupérer le token depuis le localStorage
 const getAuthToken = (): string | null => {
